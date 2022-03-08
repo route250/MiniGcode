@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="100">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <logicalFolder name="SourceFiles" displayName="ソース・ファイル" projectFiles="true">
+      <itemPath>src/GBlock.cpp</itemPath>
+      <itemPath>src/GReader.cpp</itemPath>
+      <itemPath>src/GThread.cpp</itemPath>
+      <itemPath>src/Gunit.cpp</itemPath>
+      <itemPath>src/MGmath.cpp</itemPath>
+      <itemPath>src/MotorCtl.cpp</itemPath>
+      <itemPath>src/config.cpp</itemPath>
+      <itemPath>src/main.cpp</itemPath>
+    </logicalFolder>
+    <logicalFolder name="HeaderFiles" displayName="ヘッダー・ファイル" projectFiles="true">
+      <itemPath>src/GBlock.h</itemPath>
+      <itemPath>src/GReader.h</itemPath>
+      <itemPath>src/GThread.h</itemPath>
+      <itemPath>src/Gunit.h</itemPath>
+      <itemPath>src/MGmath.h</itemPath>
+      <itemPath>src/MotorCtl.h</itemPath>
+      <itemPath>src/config.h</itemPath>
+    </logicalFolder>
+    <logicalFolder name="ResourceFiles" displayName="リソース・ファイル" projectFiles="true">
+    </logicalFolder>
+    <logicalFolder name="TestFiles"
+                   displayName="テスト・ファイル"
+                   projectFiles="false"
+                   kind="TEST_LOGICAL_FOLDER">
+      <logicalFolder name="f1" displayName="角度計算テスト" projectFiles="true" kind="TEST">
+        <itemPath>tests/angluefunctest.cpp</itemPath>
+      </logicalFolder>
+    </logicalFolder>
+    <logicalFolder name="ExternalFiles"
+                   displayName="重要なファイル"
+                   projectFiles="false"
+                   kind="IMPORTANT_FILES_FOLDER">
+      <itemPath>Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <projectmakefile>Makefile</projectmakefile>
+  <confs>
+    <conf name="Debug" type="1">
+      <toolsSet>
+        <compilerSet>GNU_8|GNU</compilerSet>
+        <dependencyChecking>true</dependencyChecking>
+        <rebuildPropChanged>false</rebuildPropChanged>
+      </toolsSet>
+      <compileType>
+        <ccTool>
+          <commandLine>-lpthread -lreadline -l wiringPi</commandLine>
+        </ccTool>
+      </compileType>
+      <folder path="TestFiles/f1">
+        <cTool>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
+        </cTool>
+        <ccTool>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
+        </ccTool>
+        <linkerTool>
+          <output>${TESTDIR}/TestFiles/f1</output>
+        </linkerTool>
+      </folder>
+      <item path="src/GBlock.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GBlock.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/GReader.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GReader.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/GThread.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GThread.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/Gunit.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/Gunit.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/MGmath.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MGmath.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/MotorCtl.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MotorCtl.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/config.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/config.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/main.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="tests/angluefunctest.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+    </conf>
+    <conf name="Release" type="1">
+      <toolsSet>
+        <compilerSet>default</compilerSet>
+        <dependencyChecking>true</dependencyChecking>
+        <rebuildPropChanged>false</rebuildPropChanged>
+      </toolsSet>
+      <compileType>
+        <cTool>
+          <developmentMode>5</developmentMode>
+        </cTool>
+        <ccTool>
+          <developmentMode>5</developmentMode>
+        </ccTool>
+        <fortranCompilerTool>
+          <developmentMode>5</developmentMode>
+        </fortranCompilerTool>
+        <asmTool>
+          <developmentMode>5</developmentMode>
+        </asmTool>
+      </compileType>
+      <folder path="TestFiles/f1">
+        <cTool>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
+        </cTool>
+        <ccTool>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
+        </ccTool>
+        <linkerTool>
+          <output>${TESTDIR}/TestFiles/f1</output>
+        </linkerTool>
+      </folder>
+      <item path="src/GBlock.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GBlock.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/GReader.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GReader.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/GThread.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/GThread.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/Gunit.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/Gunit.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/MGmath.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MGmath.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/MotorCtl.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MotorCtl.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/config.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/config.h" ex="false" tool="3" flavor2="0">
+      </item>
+      <item path="src/main.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="tests/angluefunctest.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+    </conf>
+  </confs>
+</configurationDescriptor>

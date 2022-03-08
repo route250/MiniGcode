@@ -71,7 +71,7 @@ void GThread::setScale( double aScale ) {
     mScale = aScale;
 }
 
-pos_vct GThread::step_to_pos( step_vct& aStep, double aScale, pos_vct& aOffset ) {
+pos_vct GThread::step_to_pos( step_vct& aStep ) {
     pos_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
         aResult[i] = mMotors[i].step_to_pos( aStep[i] ) + mOffsetPos[i];
@@ -79,7 +79,7 @@ pos_vct GThread::step_to_pos( step_vct& aStep, double aScale, pos_vct& aOffset )
     return aResult;
 }
 
-step_vct GThread::pos_to_step( pos_vct& aPos, double aScale, pos_vct& aOffset ) {
+step_vct GThread::pos_to_step( pos_vct& aPos ) {
     step_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
         aResult[i] = mMotors[i].pos_to_step( aPos[i] - mOffsetPos[i] );
@@ -87,13 +87,13 @@ step_vct GThread::pos_to_step( pos_vct& aPos, double aScale, pos_vct& aOffset ) 
     return aResult;
 }
 
-step_t GThread::pos_to_step( int aNo, pos_t aPos, double aScale, pos_t aOffset ) {
+step_t GThread::pos_to_step( int aNo, pos_t aPos ) {
     return mMotors[aNo].pos_to_step( aPos - mOffsetPos[aNo] );
 }
 step_t GThread::getCurrentStep( int aNo ) {
     return mMotors[aNo].getCurrentStep();
 }
-pos_t GThread::getCurrentPos( int aNo, double aScale, pos_t aOffset ) {
+pos_t GThread::getCurrentPos( int aNo ) {
     return mMotors[aNo].getCurrentPos() + mOffsetPos[aNo];
 }
 
@@ -107,13 +107,41 @@ bool GThread::configure( config& aConfig ) {
         string zPath;
         zPath.push_back( 'x'+i );
 
-        int zSteps = aConfig.getNumber( zPath + "/steps", 200 );
-        int zLength = aConfig.getNumber( zPath + "/length", 20000 );
+        int zPich = aConfig.getNumber( zPath + "/pich", -1 );
+        int zLength = aConfig.getNumber( zPath + "/length", -1 );
+        double zStepAngle = aConfig.getNumber( zPath + "/motor/stepangle", -1 );
+        int zExcitation = aConfig.getBool( zPath + "/motor/excitationmethod", false );
+        if( zStepAngle > 0 ) {
+            int n = (360.0/zStepAngle)+0.5;
+            if( n> 0 ) {
+                zStepAngle = 360.0 / n;
+            } else {
+                zStepAngle = 0;
+            }
+        }
+        int zSteps = 0;
+        if( zStepAngle > 0 && zPich > 0 && zLength > 0 ) {
+            int n = 360.0/zStepAngle;
+            if( zExcitation == 12 || zExcitation == 21 ) {
+                n = n * 2;
+            }
+            double d = ((double)zPich) / (double)n;
+            zSteps = ((double)zLength) / d;
+            zLength = d * zSteps;
+        }
+        if( zPich > 0 ) {
+            mPich[i] = zPich;
+        } else {
+            mPich[i] = 0;
+        }
+        mMotors[i].setStepAngle( zStepAngle );
+        mMotors[i].setExcitationMethod( zExcitation );
+        mMotors[i].step_size_length( zSteps, zLength );
+
         int zOffset = aConfig.getNumber( zPath + "/offset", 0 );
         bool zReverse = aConfig.getBool( zPath + "/reverse", false );
 
         mMotors[i].setReverse( zReverse );
-        mMotors[i].step_size_length( zSteps, zLength );
         mOffsetPos[i] = zOffset;
         std::cout << "[config]" << zPath <<" steps:" << zSteps << " length:" << zLength << std::endl;
 
@@ -124,12 +152,15 @@ bool GThread::configure( config& aConfig ) {
         std::cout<<"[DBG] A1:" <<pinA1<<std::endl;
         mMotors[i].setMotorPin( pinA1, pinA2, pinB1, pinB2 );
 
-        int min = aConfig.getNumber( zPath + "/motor/minpulse", 4000 );
-        int max = aConfig.getNumber( zPath + "/motor/maxpulse", 4000 );
-        mMotors[i].pulse_min_max( min, max );
+        int min = aConfig.getNumber( zPath + "/motor/minpps", -1 );
+        if( min > 0 ) {
+            mMotors[i].setMinSpeed(min);
+        }
+        int max = aConfig.getNumber( zPath + "/motor/maxpps", -1 );
+        if( max > 0 ) {
+            mMotors[i].setMaxSpeed(max);
+        }
         
-        bool zUseHalf = aConfig.getBool( zPath + "/motor/halfstep", false );
-        mMotors[i].set_use_half_step( zUseHalf );
 
         {
             int zPin = aConfig.getNumber( zPath + "/home/pin", 0 );
@@ -619,7 +650,7 @@ bool GThread::send99( step_vct& aStep ) {
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-void GThread::show( std::ostream &aOut, double aScale, pos_vct& aOffset ) {
+void GThread::show( std::ostream &aOut ) {
     aOut << "Abort:" << isAbort();
     aOut << " Power:" << is_power();
     aOut << " Homeing:" <<isDoneHoming();
@@ -627,9 +658,10 @@ void GThread::show( std::ostream &aOut, double aScale, pos_vct& aOffset ) {
     for( int i=0; i<NUM_MOTORS; i++ ) {
         mMotors[i].show( aOut );
         //
+        aOut << "  pich:" <<mPich[i];
+        aOut << " offset:" <<mOffsetPos[i];
         pos_t zC = mMotors[i].getCurrentPos();
         pos_t zL = mMotors[i].getPosLength();
-        aOut << "  offset:" <<mOffsetPos[i];
         aOut << " cur:" << (zC + mOffsetPos[i]);
         aOut << " max:" << (zL + mOffsetPos[i]);
         aOut << endl;

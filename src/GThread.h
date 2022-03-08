@@ -42,6 +42,7 @@ private:
     bool mActive;
     pthread_t mThread;
 
+    deg_t mPich[NUM_MOTORS];
     pos_t mOffsetPos[NUM_MOTORS];
     
     string mCurrentLine;
@@ -87,12 +88,12 @@ public:
     bool send_end_block( step_vct& aStep );
     bool send99( step_vct& aStep );
     
-    void show( std::ostream &aOut, double aScale, pos_vct& aOffset );
-    pos_vct step_to_pos( step_vct& aStep, double aScale, pos_vct& aOffset );
-    step_vct pos_to_step( pos_vct& aPos, double aScale, pos_vct& aOffset );
-    step_t pos_to_step( int aNo, pos_t aPos, double aScale, pos_t aOffset );
+    void show( std::ostream &aOut );
+    pos_vct step_to_pos( step_vct& aStep );
+    step_vct pos_to_step( pos_vct& aPos );
+    step_t pos_to_step( int aNo, pos_t aPos );
     step_t getCurrentStep( int aNo );
-    pos_t getCurrentPos( int aNo, double aScale, pos_t aOffset );
+    pos_t getCurrentPos( int aNo );
 public:
     void thread_loop();
     bool put( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep );

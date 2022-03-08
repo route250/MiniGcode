@@ -17,24 +17,30 @@
 #include <wiringPi.h>
 
 #include "Gunit.h"
+#include "MGmath.h"
 
 #define NUM_PHASE 8
 
 class MotorCtl {
 private:
-    int mNo;
+    int mNo = 0;
 
-    bool mReverse;
-    step_t mStep_max;
-    pos_t mPos_length;
-    double mPosPerStep;
-    double mStepPerPos;
+    deg_t mStepAngle = 0;
+    step_t mMinSpeed = 0;
+    step_t mMaxSpeed = 0;
+    step_t mIncSpeed = 0;
+    
+    bool mReverse = false;
+    step_t mStep_max = 0;
+    pos_t mPos_length = 0;
+    double mPosPerStep = 0;
+    double mStepPerPos = 0;
 
-    int use_half_step;
-    int mAssignA1;
-    int mAssignA2;
-    int mAssignB1;
-    int mAssignB2;
+    int mExcitationMethod = 0;
+    int mAssignA1 = 0;
+    int mAssignA2 = 0;
+    int mAssignB1 = 0;
+    int mAssignB2 = 0;
     
     int mPinA1;
     int stateA1;
@@ -57,9 +63,9 @@ public:
     int mCurrentPhase;
     long pulse_elapsed_time_usec = 0;
     long pulse_length_usec = 0;
-    long pulse_min_length_usec = 200 * 1000;
-    long pulse_max_length_usec = 500 * 1000;
-    long pulse_inc_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / 3;
+//    long pulse_min_length_usec = 200 * 1000;
+//    long pulse_max_length_usec = 500 * 1000;
+//    long pulse_inc_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / 3;
 
     // モータの位置
     step_t current_step = 0;
@@ -80,15 +86,16 @@ public:
     void swapAB();
     void swapA();
     void swapB();
-    void pulse_min( usec_t min );
-    void pulse_max( usec_t usec );
-    void pulse_min_max( usec_t min, usec_t max );
+    void setMinSpeed( step_t aSpeed );
+    void setMaxSpeed( step_t aSpeed );
+    void setStepAngle( deg_t aAngle );
+    void setExcitationMethod( int aMethod );
+
     bool isReverse();
     void setReverse( bool b );
     void step_size_length( step_t size, pos_t length );
     step_t getStepMax();
     pos_t getPosLength();
-    void set_use_half_step( bool f );
 
     bool is_availavle();
 
@@ -102,7 +109,7 @@ public:
     void poff();
     void pon();
     bool is_power();
-
+    // ログ出力用
     void out_phase( int A1, int A2, int B1, int B2 );
     void out_phase_no( int ph );
     void out_step( int direction, bool aForce );
@@ -115,6 +122,10 @@ public:
     int getStateA2();
     int getStateB1();
     int getStateB2();
+    deg_t getStepAngle();
+    step_t getMinSpeed();
+    step_t getMaxSpeed();
+    step_t getIncSpeed();
     void show( std::ostream& aOut );
     bool isAbort();
     
@@ -126,6 +137,8 @@ public:
 private:
     void operator =(const MotorCtl &src) {}
     MotorCtl(const MotorCtl &src) {}
+private:
+    void update_config();
 
 };
 

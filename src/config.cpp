@@ -70,7 +70,7 @@ string config::getText( string aPath ) {
     }
     //std::cout<<"getText "<<aPath<<" -> "<<zKey << "," <<zNextPath <<std::endl;
     for( int i=0; i<mChilds.size(); i++ ) {
-        if( mChilds[i]->mKey == zKey ) {
+        if( str::tolower(mChilds[i]->mKey) == str::tolower(zKey) ) {
             if( zNextPath.empty() ) {
                 return mChilds[i]->getText();
             } else {
@@ -120,7 +120,7 @@ config *config::getChild( string aPath ) {
         zNextPath = aPath.substr(p+1);
     }
     for( int i=0; i<mChilds.size(); i++ ) {
-        if( mChilds[i]->mKey == zKey ) {
+        if( str::tolower(mChilds[i]->mKey) == str::tolower(zKey) ) {
             if( zNextPath.empty() ) {
                 return mChilds[i];
             } else {

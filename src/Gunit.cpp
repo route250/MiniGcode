@@ -126,7 +126,7 @@ string str::tolower( string aValue ) {
         char cc = aValue[i];
         if( 'A'<=cc && cc<='Z' ) {
             update = true;
-            cc = ( cc + 33 );
+            cc = ( cc + 32 );
         }
         zRet << cc;
     }

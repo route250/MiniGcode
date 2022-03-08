@@ -1,0 +1,59 @@
+#
+x {
+  length 35000
+  pich 3600
+  motor {
+    stepAngle 9.0
+    pinA1 26
+    pinA2 27
+    pinB1 28
+    pinB2 29
+    MinPPS 100
+    MaxPPS 100
+  }
+  home {
+    pin 25
+    pud dn
+    logic false
+  }
+}
+y {
+  pich 3000
+  length 37000
+#  steps 500
+  motor {
+    stepAngle 9.0
+    pinA1 21
+    pinA2 22
+    pinB1 23
+    pinB2 24
+    MinPPS 400
+    MaxPPS 400
+  }
+  home {
+    pin 6
+    pud up
+    logic false
+  }
+}
+z {
+  pich 3000
+  length 33000
+  offset -2348
+#  steps 460
+  reverse true
+  motor {
+    stepAngle 9.0
+    pinA1 0
+    pinA2 1
+    pinB1 3
+    pinB2 4
+    MinPPS 600
+    MaxPPS 600
+  }
+  home {
+    pin 5
+    pud dn
+    logic false
+  }
+}

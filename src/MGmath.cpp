@@ -118,3 +118,22 @@ void out_double( std::ostream &aOut, double_vct& aPos ) {
     }
     aOut << ")";
 }
+
+usec_t pps_to_usec( step_t aSpeed ) {
+    // pps = pulse/sec = pulse*1000000/usec
+    // 1/pps = sec/pulse = usec/(pulse*1000000)
+    if( aSpeed > 0 ) {
+        return 1000000 / aSpeed;
+    } else {
+        return 0;
+    }
+}
+step_t usec_to_pps( usec_t aUsec ) {
+    // pps = pulse/sec = pulse*1000000/usec
+    // 1/pps = sec/pulse = usec/(pulse*1000000)
+    if( aUsec > 0 ) {
+        return 1000000 / aUsec;
+    } else {
+        return 0;
+    }
+}

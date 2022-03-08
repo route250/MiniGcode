@@ -146,5 +146,7 @@ void out_pos( std::ostream &aOut, pos_vct& aPos );
 void out_step( std::ostream &aOut, step_vct& aStep );
 void out_double( std::ostream &aOut, double_vct& aValue );
 
+usec_t pps_to_usec( step_t aSpeed );
+step_t usec_to_pps( usec_t aUsec );
 #endif /* MGMATH_H */
 

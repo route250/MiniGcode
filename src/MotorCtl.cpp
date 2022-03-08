@@ -14,18 +14,31 @@
 #include <stdio.h>
 #include "MotorCtl.h"
 
+using std::cout;
+using std::endl;
+
+
 MotorCtl::MotorCtl() {
     mPinA1 = mAssignA1 = -1;
     mPinA2 = mAssignA2 = -1;
     mPinB1 = mAssignB1 = -1;
     mPinB2 = mAssignB2 = -1;
 
+    mStepAngle = 0;
+    mMinSpeed = 0;
+    mMaxSpeed = 0;
+    mIncSpeed = 0;
+
     mOrgPin = -1;
     mOrgLogic = LOW;
     mOrgPin_pullUpDn = 0;
 
     enable_power = -1;
-    mCurrentPhase = 0;
+    stateA1 = LOW;
+    stateA2 = LOW;
+    stateB1 = LOW;
+    stateB2 = LOW;
+    mCurrentPhase = 9999;
     mDoneHoming = false;
     mAbort = false;
 }
@@ -120,30 +133,55 @@ int MotorCtl::getStateA2() { return stateA2; }
 int MotorCtl::getStateB1() { return stateB1; }
 int MotorCtl::getStateB2() { return stateB2; }
 
-void MotorCtl::pulse_min( usec_t usec ) {
-    pulse_min_length_usec = usec;
-    if( pulse_min_length_usec > pulse_min_length_usec ) {
-        pulse_max_length_usec = usec;
-    }
-    pulse_inc_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / 3;
-}
-
-void MotorCtl::pulse_max( usec_t usec ) {
-    pulse_max_length_usec = usec;
-    if( pulse_max_length_usec < pulse_min_length_usec ) {
-        pulse_min_length_usec = usec;
-    }
-    pulse_inc_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / 3;
-}
-
-void MotorCtl::pulse_min_max( usec_t min, usec_t max ) {
-    if( min < max ) {
-        pulse_min( min );
+/**
+ * 再計算
+ */
+void MotorCtl::update_config() {
+    if( mMinSpeed > 0 && mMaxSpeed > 0 ) {
+        mIncSpeed = ( mMaxSpeed - mMinSpeed ) / 7;
     } else {
-        pulse_min( max );
+        mIncSpeed = 0;
     }
-    pulse_max( max );
 }
+
+void MotorCtl::setStepAngle( deg_t aAngle ) {
+    mStepAngle = aAngle;
+    update_config();
+}
+
+deg_t MotorCtl::getStepAngle() {
+    return mStepAngle;
+}
+
+void MotorCtl::setExcitationMethod( int aMethod ) {
+    mExcitationMethod = aMethod;
+    update_config();
+}
+
+void MotorCtl::setMinSpeed( step_t aSpeed ) {
+    mMinSpeed = aSpeed;
+    if( mMinSpeed > mMaxSpeed ) {
+        mMaxSpeed = aSpeed;
+    }
+    update_config();
+}
+
+step_t MotorCtl::getMinSpeed() {
+    return mMinSpeed;
+}
+
+void MotorCtl::setMaxSpeed( step_t aSpeed ) {
+    mMaxSpeed = aSpeed;
+    if( mMinSpeed > mMaxSpeed ) {
+        mMinSpeed = aSpeed;
+    }
+    update_config();
+}
+
+step_t MotorCtl::getMaxSpeed() {
+    return mMaxSpeed;
+}
+
 void MotorCtl::setReverse( bool aReverse ) {
     mReverse = aReverse;
 }
@@ -191,15 +229,11 @@ pos_t MotorCtl::getCurrentPos() {
     return step_to_pos( getCurrentStep() );
 }
 
-void MotorCtl::set_use_half_step( bool f ) {
-    use_half_step = f;
-}
-
 bool MotorCtl::is_availavle( ) {
     if( mPinA1<0 || mPinA2<0 || mPinB1<0 || mPinB2<0 ) {
         return false;
     }
-    if( pulse_max_length_usec == 0 || pulse_min_length_usec == 0 ) {
+    if( mMinSpeed <= 0 || mMaxSpeed <= 0 ) {
         return false;
     }
     return true;
@@ -284,11 +318,17 @@ bool MotorCtl::set_home() {
 
 bool MotorCtl::move( step_t aStep ) {
     if( aStep != 0 ) {
-        if( mCurrentPhase < 0 || NUM_PHASE <= mCurrentPhase ) {
-            mCurrentPhase = 0;
+        int st = 0, ed = NUM_PHASE;
+        if( mExcitationMethod == 2 ) {
+            ed = NUM_PHASE - 1;
+        } else if( mExcitationMethod == 1 ) {
+            st = 1;
+        }
+        if( mCurrentPhase < st || ed <= mCurrentPhase ) {
+            mCurrentPhase = st;
         }
         step_t zDirection = aStep>0 ? 1:-1;
-        int delay_msec = pulse_max_length_usec/1000;
+        int delay_msec = pps_to_usec( mMinSpeed ) / 1000;
         if( delay_msec < 1 ) {
             delay_msec = 1;
         } else if( delay_msec > 100 ) {
@@ -359,112 +399,161 @@ void MotorCtl::out_phase_no( int ph ) {
 }
 
 void MotorCtl::out_step( int direction, bool aForce ) {
-    int next_phase;
-    int step;
-    if( direction > 0 ) {
-        if ( aForce || 0<= current_step && current_step < mStep_max ) {
-            next_phase = ( mCurrentPhase + 1 ) % NUM_PHASE;
-        }
-        step = 1;
-    } else if( direction < 0 ) {
-        if( aForce || 0<current_step && current_step <=mStep_max ) {
+    int next_phase = mCurrentPhase;
+    int step = 0;
+    int st = 0, ed = NUM_PHASE, inc = 1;
+    if ( aForce || 0<= current_step && current_step < mStep_max ) {
+        if( direction > 0 ) {
+            if( mExcitationMethod == 2 ) {
+                if( mCurrentPhase < 0 || 6 <= mCurrentPhase ) {
+                    next_phase = 0;
+                } else if( mCurrentPhase < 2 ) {
+                    next_phase = 2;
+                } else if( mCurrentPhase < 4 ) {
+                    next_phase = 4;
+                } else if( mCurrentPhase < 6 ) {
+                    next_phase = 6;
+                }
+            } else if( mExcitationMethod == 1 ) {
+                if( mCurrentPhase <= 0 || 7 <= mCurrentPhase ) {
+                    next_phase = 1;
+                } else if( mCurrentPhase < 3 ) {
+                    next_phase = 3;
+                } else if( mCurrentPhase < 5 ) {
+                    next_phase = 5;
+                } else if( mCurrentPhase < 7 ) {
+                    next_phase = 7;
+                }
+            } else {
+                if( mCurrentPhase < 0 || 7<= mCurrentPhase ) {
+                    next_phase = 0;
+                } else {
+                    next_phase = mCurrentPhase + 1;
+                }
+            }
+            step = 1;
+        } else if( direction < 0 ) {
             next_phase = ( mCurrentPhase + NUM_PHASE - 1 ) % NUM_PHASE;
+            if( mExcitationMethod == 2 ) {
+                if( mCurrentPhase < 2 ) {
+                    next_phase = 6; // 0,1 => 6
+                } else if( mCurrentPhase < 4 ) {
+                    next_phase = 0; // 2,3 => 0
+                } else if( mCurrentPhase < 6 ) {
+                    next_phase = 2; // 4,5 => 2
+                } else {
+                    next_phase = 4; // 6,7 => 4
+                }
+            } else if( mExcitationMethod == 1 ) {
+                if( mCurrentPhase < 2 ) {
+                    next_phase = 7; // 0,1 => 7
+                } else if( mCurrentPhase < 4 ) {
+                    next_phase = 1; // 2,3 => 1
+                } else if( mCurrentPhase < 6 ) {
+                    next_phase = 3; // 4,5 => 3
+                } else {
+                    next_phase = 5; // 6,7 => 5
+                }
+            } else {
+                if( mCurrentPhase < 0 || 7<= mCurrentPhase ) {
+                    next_phase = 0;
+                } else {
+                    next_phase = mCurrentPhase + 1;
+                }
+            }
+            step = -1;
         }
-        step = -1;
-    } else {
-        next_phase = mCurrentPhase;
-        step = 0;
     }
     out_phase_no( next_phase );
     current_step = current_step + step;
 }
 
-void MotorCtl::signal( long time_usec ) {
-
-    if( !is_availavle( ) ) {
-        return;
-    }
-
-    if( current_step == target_step && target_step == start_step && enable_power == 2 || enable_power == -1 ) {
-        pulse_elapsed_time_usec = 0;
-        pulse_length_usec = 0;
-        return;
-    }
-    if( pulse_length_usec <= 0 ) {
-        pulse_elapsed_time_usec = 0;
-        pulse_length_usec = pulse_max_length_usec;
-    }
-    pulse_elapsed_time_usec = pulse_elapsed_time_usec + time_usec;
-    if( pulse_elapsed_time_usec < pulse_length_usec ) {
-        return;
-    }
-    pulse_elapsed_time_usec = 0;
-
-    switch( enable_power ) {
-        case -1:
-            return;
-        case 1:
-            //printf( "[m%d]power_on\n", mNo );
-            enable_power = 2;
-        case 2:
-            break;
-        default:
-            //printf( "[m%d]power_off\n", mNo );
-            enable_power = -1;
-            out_phase( LOW, LOW, LOW, LOW );
-            return;
-    }
-
-    int remaining_length, moved_length, total_length;
-    if( target_step > current_step ) {
-        // ＋移動
-        out_step( 1, false );
-        remaining_length = target_step - current_step;
-        total_length = target_step - start_step;
-        moved_length = current_step - start_step;
-    } else if( target_step < current_step ) {
-        // ー移動
-        out_step( -1, false );
-        remaining_length = current_step - target_step;
-        total_length = start_step - target_step;
-        moved_length = start_step - current_step;
-    } else {
-        // 移動終了
-        start_step = current_step;
-        return;
-    }
-    // 加減速にかかる時間
-    long delta_usec;
-    if( pulse_max_length_usec == pulse_min_length_usec || pulse_inc_usec == 0 ) {
-        delta_usec = 0;
-    } else {
-        delta_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / pulse_inc_usec + 1;
-    }
-    if( ( total_length - 2 ) < delta_usec * 2 ) {
-        delta_usec = ( total_length - 2 ) / 2;
-    }
-    if( moved_length == 0 ) {
-        // 始点
-        pulse_length_usec = pulse_max_length_usec;
-    } else if( remaining_length == 0 ) {
-        // 終点
-        pulse_length_usec = pulse_max_length_usec;
-    } else if( moved_length <= delta_usec ) {
-        // 加速
-        pulse_length_usec = pulse_length_usec - pulse_inc_usec;
-        if( pulse_length_usec < pulse_min_length_usec ) {
-            pulse_length_usec = pulse_min_length_usec;
-        }
-    } else if( remaining_length <= delta_usec ) {
-        // 減速
-        pulse_length_usec = pulse_length_usec + pulse_inc_usec;
-        if( pulse_length_usec > pulse_max_length_usec ) {
-            pulse_length_usec = pulse_max_length_usec;
-        }
-    }
-
-
-}
+//void MotorCtl::signal( long time_usec ) {
+//
+//    if( !is_availavle( ) ) {
+//        return;
+//    }
+//
+//    if( current_step == target_step && target_step == start_step && enable_power == 2 || enable_power == -1 ) {
+//        pulse_elapsed_time_usec = 0;
+//        pulse_length_usec = 0;
+//        return;
+//    }
+//    if( pulse_length_usec <= 0 ) {
+//        pulse_elapsed_time_usec = 0;
+//        pulse_length_usec = pulse_max_length_usec;
+//    }
+//    pulse_elapsed_time_usec = pulse_elapsed_time_usec + time_usec;
+//    if( pulse_elapsed_time_usec < pulse_length_usec ) {
+//        return;
+//    }
+//    pulse_elapsed_time_usec = 0;
+//
+//    switch( enable_power ) {
+//        case -1:
+//            return;
+//        case 1:
+//            //printf( "[m%d]power_on\n", mNo );
+//            enable_power = 2;
+//        case 2:
+//            break;
+//        default:
+//            //printf( "[m%d]power_off\n", mNo );
+//            enable_power = -1;
+//            out_phase( LOW, LOW, LOW, LOW );
+//            return;
+//    }
+//
+//    int remaining_length, moved_length, total_length;
+//    if( target_step > current_step ) {
+//        // ＋移動
+//        out_step( 1, false );
+//        remaining_length = target_step - current_step;
+//        total_length = target_step - start_step;
+//        moved_length = current_step - start_step;
+//    } else if( target_step < current_step ) {
+//        // ー移動
+//        out_step( -1, false );
+//        remaining_length = current_step - target_step;
+//        total_length = start_step - target_step;
+//        moved_length = start_step - current_step;
+//    } else {
+//        // 移動終了
+//        start_step = current_step;
+//        return;
+//    }
+//    // 加減速にかかる時間
+//    long delta_usec;
+//    if( pulse_max_length_usec == pulse_min_length_usec || pulse_inc_usec == 0 ) {
+//        delta_usec = 0;
+//    } else {
+//        delta_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / pulse_inc_usec + 1;
+//    }
+//    if( ( total_length - 2 ) < delta_usec * 2 ) {
+//        delta_usec = ( total_length - 2 ) / 2;
+//    }
+//    if( moved_length == 0 ) {
+//        // 始点
+//        pulse_length_usec = pulse_max_length_usec;
+//    } else if( remaining_length == 0 ) {
+//        // 終点
+//        pulse_length_usec = pulse_max_length_usec;
+//    } else if( moved_length <= delta_usec ) {
+//        // 加速
+//        pulse_length_usec = pulse_length_usec - pulse_inc_usec;
+//        if( pulse_length_usec < pulse_min_length_usec ) {
+//            pulse_length_usec = pulse_min_length_usec;
+//        }
+//    } else if( remaining_length <= delta_usec ) {
+//        // 減速
+//        pulse_length_usec = pulse_length_usec + pulse_inc_usec;
+//        if( pulse_length_usec > pulse_max_length_usec ) {
+//            pulse_length_usec = pulse_max_length_usec;
+//        }
+//    }
+//
+//
+//}
 
 void MotorCtl::homing( std::ostream &aOut ) {
 
@@ -473,7 +562,7 @@ void MotorCtl::homing( std::ostream &aOut ) {
         return;
     }
 
-    int delay_msec = pulse_max_length_usec * 3 /1000;
+    int delay_msec = pps_to_usec( mMinSpeed ) / 1000;
     int delay2_msec = 200;
     if( delay_msec < 20 ) {
         delay_msec = 20;
@@ -592,23 +681,20 @@ bool is_availavle( MotorCtl *m ) {
 
 void MotorCtl::show( std::ostream &aOut ) {
     aOut << "motor no:" << no() << std::endl;
+
+    aOut << "  step angle:"<<mStepAngle;
+    aOut << " Excitation:" << mExcitationMethod;
+    aOut << " speed(pps):";
+    aOut << " " <<mMinSpeed<<"("<< (float)(pps_to_usec(mMinSpeed))/1000.0<<"msec)";
+    aOut << "-" <<mMaxSpeed<<"("<< (float)(pps_to_usec(mMaxSpeed))/1000.0<<"msec)";
+    aOut << "/" <<mIncSpeed<<"("<< (float)(pps_to_usec(mIncSpeed))/1000.0<<"msec)";
+    aOut << endl;
     
     aOut << " ";
     aOut << " "; print_pin( aOut, getPinA1() );
     aOut << " "; print_pin( aOut, getPinA2() );
     aOut << " "; print_pin( aOut, getPinB1() );
     aOut << " "; print_pin( aOut, getPinB2() );
-    aOut << std::endl;
-    aOut << "  phase:" << mCurrentPhase << " ";
-    aOut << " " << getStateA1();
-    aOut << " " << getStateA2();
-    aOut << " " << getStateB1();
-    aOut << " " << getStateB2();
-    aOut << std::endl;
-    aOut << "  speed(msec):";
-    aOut << " " << (float)(pulse_min_length_usec)/1000.0;
-    aOut << "-" << (float)(pulse_max_length_usec)/1000.0;
-    aOut << "/" << (float)(pulse_inc_usec)/1000.0;
     if( haveHomingPin() ) {
         aOut << "  home:"; print_pin( aOut, mOrgPin );
         int ah = isHome() ? HIGH : LOW;
@@ -633,6 +719,13 @@ void MotorCtl::show( std::ostream &aOut ) {
     } else {
         aOut << "  home:not present" <<std::endl;
     }
+    
+    aOut << "  phase:" << mCurrentPhase << " ";
+    aOut << " " << getStateA1();
+    aOut << " " << getStateA2();
+    aOut << " " << getStateB1();
+    aOut << " " << getStateB2();
+    aOut << std::endl;
     aOut << "  step:" <<getCurrentStep() <<"/"<< mStep_max;
     if( mReverse ) {
         aOut << "(reverse)";
