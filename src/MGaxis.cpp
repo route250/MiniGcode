@@ -12,13 +12,12 @@
  */
 
 #include <stdio.h>
-#include "MotorCtl.h"
+#include "MGaxis.h"
 
 using std::cout;
 using std::endl;
 
-
-MotorCtl::MotorCtl() {
+MGaxis::MGaxis() {
     mPinA1 = mAssignA1 = -1;
     mPinA2 = mAssignA2 = -1;
     mPinB1 = mAssignB1 = -1;
@@ -43,24 +42,24 @@ MotorCtl::MotorCtl() {
     mAbort = false;
 }
 
-MotorCtl::~MotorCtl( ) {
+MGaxis::~MGaxis( ) {
 }
 
 /**
  * 
  * @return 
  */
-int MotorCtl::no( ) {
+int MGaxis::no( ) {
     return mNo;
 }
-void MotorCtl::setNo( int aNo ) {
+void MGaxis::setNo( int aNo ) {
     mNo = aNo;
 }
 
 /**
  * 
  */
-void MotorCtl::init( ) {
+void MGaxis::init( ) {
     if( is_availavle( ) ) {
         if( mAssignA1 >= 0 ) {
             pinMode( mAssignA1, OUTPUT );
@@ -90,7 +89,7 @@ void MotorCtl::init( ) {
 
 }
 
-void MotorCtl::setMotorPin( int a, int b, int c, int d ) {
+void MGaxis::setMotorPin( int a, int b, int c, int d ) {
         std::cout<<"[DBG]set A1:" <<a<<std::endl;
     mAssignA1 = a;
     mAssignA2 = b;
@@ -99,44 +98,44 @@ void MotorCtl::setMotorPin( int a, int b, int c, int d ) {
     pin_reset();
 }
 
-void MotorCtl::pin_reset( ) {
+void MGaxis::pin_reset( ) {
     mPinA1 = mAssignA1;
     mPinA2 = mAssignA2;
     mPinB1 = mAssignB1;
     mPinB2 = mAssignB2;
 }
 
-void MotorCtl::swapAB( ) {
+void MGaxis::swapAB( ) {
     swapi( &mPinA1, &mPinB1 );
     swapi( &stateA1, &stateB1 );
     swapi( &mPinA2, &mPinB2 );
     swapi( &stateA2, &stateB2 );
 }
 
-void MotorCtl::swapA( ) {
+void MGaxis::swapA( ) {
     swapi( &mPinA1, &mPinA2 );
     swapi( &stateA1, &stateA2 );
 }
 
-void MotorCtl::swapB( ) {
+void MGaxis::swapB( ) {
     swapi( &mPinB1, &mPinB2 );
     swapi( &stateB1, &stateB2 );
 }
 
-int MotorCtl::getPinA1() { return mAssignA1; }
-int MotorCtl::getPinA2() { return mAssignA2; }
-int MotorCtl::getPinB1() { return mAssignB1; }
-int MotorCtl::getPinB2() { return mAssignB2; }
+int MGaxis::getPinA1() { return mAssignA1; }
+int MGaxis::getPinA2() { return mAssignA2; }
+int MGaxis::getPinB1() { return mAssignB1; }
+int MGaxis::getPinB2() { return mAssignB2; }
 
-int MotorCtl::getStateA1() { return stateA1; }
-int MotorCtl::getStateA2() { return stateA2; }
-int MotorCtl::getStateB1() { return stateB1; }
-int MotorCtl::getStateB2() { return stateB2; }
+int MGaxis::getStateA1() { return stateA1; }
+int MGaxis::getStateA2() { return stateA2; }
+int MGaxis::getStateB1() { return stateB1; }
+int MGaxis::getStateB2() { return stateB2; }
 
 /**
  * 再計算
  */
-void MotorCtl::update_config() {
+void MGaxis::update_config() {
     if( mMinSpeed > 0 && mMaxSpeed > 0 ) {
         mIncSpeed = ( mMaxSpeed - mMinSpeed ) / 7;
     } else {
@@ -144,21 +143,21 @@ void MotorCtl::update_config() {
     }
 }
 
-void MotorCtl::setStepAngle( deg_t aAngle ) {
+void MGaxis::setStepAngle( deg_t aAngle ) {
     mStepAngle = aAngle;
     update_config();
 }
 
-deg_t MotorCtl::getStepAngle() {
+deg_t MGaxis::getStepAngle() {
     return mStepAngle;
 }
 
-void MotorCtl::setExcitationMethod( int aMethod ) {
+void MGaxis::setExcitationMethod( int aMethod ) {
     mExcitationMethod = aMethod;
     update_config();
 }
 
-void MotorCtl::setMinSpeed( step_t aSpeed ) {
+void MGaxis::setMinSpeed( step_t aSpeed ) {
     mMinSpeed = aSpeed;
     if( mMinSpeed > mMaxSpeed ) {
         mMaxSpeed = aSpeed;
@@ -166,11 +165,11 @@ void MotorCtl::setMinSpeed( step_t aSpeed ) {
     update_config();
 }
 
-step_t MotorCtl::getMinSpeed() {
+step_t MGaxis::getMinSpeed() {
     return mMinSpeed;
 }
 
-void MotorCtl::setMaxSpeed( step_t aSpeed ) {
+void MGaxis::setMaxSpeed( step_t aSpeed ) {
     mMaxSpeed = aSpeed;
     if( mMinSpeed > mMaxSpeed ) {
         mMinSpeed = aSpeed;
@@ -178,34 +177,37 @@ void MotorCtl::setMaxSpeed( step_t aSpeed ) {
     update_config();
 }
 
-step_t MotorCtl::getMaxSpeed() {
+step_t MGaxis::getMaxSpeed() {
     return mMaxSpeed;
 }
 
-void MotorCtl::setReverse( bool aReverse ) {
+void MGaxis::setReverse( bool aReverse ) {
     mReverse = aReverse;
 }
-bool MotorCtl::isReverse() {
+bool MGaxis::isReverse() {
     return mReverse;
 }
-void MotorCtl::step_size_length( step_t size, pos_t length ) {
+void MGaxis::step_size_length( step_t size, pos_t length ) {
     mStep_max = size;
     mPos_length = length;
     mPosPerStep = (double)length / (double)size;
     mStepPerPos = (double)size / (double)length;
 }
-step_t MotorCtl::getStepMax() {
+step_t MGaxis::getStepMax() {
     return mStep_max;
 }
-pos_t MotorCtl::getPosLength() {
+pos_t MGaxis::getPosLength() {
     return mPos_length;
 }
+double MGaxis::getPosPerStep() {
+    return mPosPerStep;
+}
 
-step_t MotorCtl::getCurrentStep() {
+step_t MGaxis::getCurrentStep() {
     return current_step;
 }
 
-step_t MotorCtl::pos_to_step( pos_t aPos ) {
+step_t MGaxis::pos_to_step( pos_t aPos ) {
     double v = ((double)aPos) * mStepPerPos;
     step_t zStep = (step_t)v;
     if( mReverse ) {
@@ -215,7 +217,7 @@ step_t MotorCtl::pos_to_step( pos_t aPos ) {
     }
 }
 
-pos_t MotorCtl::step_to_pos( step_t aStep ) {
+pos_t MGaxis::step_to_pos( step_t aStep ) {
     if( mReverse ) {
         double v = ((double)aStep) * mPosPerStep;
         return mPos_length -(pos_t)v;
@@ -225,30 +227,33 @@ pos_t MotorCtl::step_to_pos( step_t aStep ) {
     }
 }
 
-pos_t MotorCtl::getCurrentPos() {
+pos_t MGaxis::getCurrentPos() {
     return step_to_pos( getCurrentStep() );
 }
 
-bool MotorCtl::is_availavle( ) {
+bool MGaxis::is_availavle( ) {
     if( mPinA1<0 || mPinA2<0 || mPinB1<0 || mPinB2<0 ) {
         return false;
     }
     if( mMinSpeed <= 0 || mMaxSpeed <= 0 ) {
         return false;
     }
+    if( mStepAngle <=0 || mExcitationMethod <= 0 ) {
+        return false;
+    }
     return true;
 }
 
-bool MotorCtl::haveHomingPin() {
+bool MGaxis::haveHomingPin() {
     return mOrgPin>=0;
 }
-void MotorCtl::setHomePin( int no, bool logic, int pull_updn ) {
+void MGaxis::setHomePin( int no, bool logic, int pull_updn ) {
     mOrgPin = no;
     mOrgLogic = logic ? HIGH : LOW;
     mOrgPin_pullUpDn = pull_updn;
 }
 
-bool MotorCtl::isHome( ) {
+bool MGaxis::isHome( ) {
     if( mOrgPin >= 0 ) {
         if( digitalRead( mOrgPin ) == mOrgLogic ) {
             return true;
@@ -258,18 +263,18 @@ bool MotorCtl::isHome( ) {
     }
     return true;
 }
-bool MotorCtl::isDoneHoming() {
+bool MGaxis::isDoneHoming() {
     if( mOrgPin >= 0 ) {
         return mDoneHoming && mCurrentPhase>=0;
     } else {
         return mCurrentPhase>=0;
     }
 }
-bool MotorCtl::isAbort() {
+bool MGaxis::isAbort() {
     return mAbort;
 }
 
-void MotorCtl::poff( ) {
+void MGaxis::poff( ) {
     if( !is_availavle( ) ) {
         return;
     }
@@ -289,7 +294,7 @@ void MotorCtl::poff( ) {
     mDoneHoming = false;
 }
 
-void MotorCtl::pon() {
+void MGaxis::pon() {
     if( !is_availavle( ) ) {
         return;
     }
@@ -299,11 +304,11 @@ void MotorCtl::pon() {
     enable_power = 2;
 }
 
-bool MotorCtl::is_power() {
+bool MGaxis::is_power() {
     return enable_power>0;
 }
 
-bool MotorCtl::set_home() {
+bool MGaxis::set_home() {
     if( is_power() && 0 <= mCurrentPhase && mCurrentPhase <= NUM_PHASE ) {
         pulse_elapsed_time_usec = 0;
         current_step = 0;
@@ -316,7 +321,7 @@ bool MotorCtl::set_home() {
     }
 }
 
-bool MotorCtl::move( step_t aStep ) {
+bool MGaxis::move( step_t aStep ) {
     if( aStep != 0 ) {
         int st = 0, ed = NUM_PHASE;
         if( mExcitationMethod == 2 ) {
@@ -343,7 +348,8 @@ bool MotorCtl::move( step_t aStep ) {
     }
     return true;
 }
-void MotorCtl::out_phase( int A1, int A2, int B1, int B2 ) {
+
+void MGaxis::out_phase( int A1, int A2, int B1, int B2 ) {
     if( enable_power <=0 ) {
         return;
     }
@@ -365,7 +371,7 @@ void MotorCtl::out_phase( int A1, int A2, int B1, int B2 ) {
     }
 }
 
-void MotorCtl::out_phase_no( int ph ) {
+void MGaxis::out_phase_no( int ph ) {
 
     switch( ph ) {
         case 0:
@@ -398,7 +404,7 @@ void MotorCtl::out_phase_no( int ph ) {
 
 }
 
-void MotorCtl::out_step( int direction, bool aForce ) {
+void MGaxis::out_step( int direction, bool aForce ) {
     int next_phase = mCurrentPhase;
     int step = 0;
     int st = 0, ed = NUM_PHASE, inc = 1;
@@ -425,7 +431,7 @@ void MotorCtl::out_step( int direction, bool aForce ) {
                     next_phase = 7;
                 }
             } else {
-                if( mCurrentPhase < 0 || 7<= mCurrentPhase ) {
+                if( mCurrentPhase < 0 || mCurrentPhase >= 7 ) {
                     next_phase = 0;
                 } else {
                     next_phase = mCurrentPhase + 1;
@@ -433,7 +439,6 @@ void MotorCtl::out_step( int direction, bool aForce ) {
             }
             step = 1;
         } else if( direction < 0 ) {
-            next_phase = ( mCurrentPhase + NUM_PHASE - 1 ) % NUM_PHASE;
             if( mExcitationMethod == 2 ) {
                 if( mCurrentPhase < 2 ) {
                     next_phase = 6; // 0,1 => 6
@@ -455,10 +460,12 @@ void MotorCtl::out_step( int direction, bool aForce ) {
                     next_phase = 5; // 6,7 => 5
                 }
             } else {
-                if( mCurrentPhase < 0 || 7<= mCurrentPhase ) {
+                if( mCurrentPhase <= 0 ) {
+                    next_phase = 7;
+                } else if( mCurrentPhase > 7 ) {
                     next_phase = 0;
                 } else {
-                    next_phase = mCurrentPhase + 1;
+                    next_phase = mCurrentPhase - 1;
                 }
             }
             step = -1;
@@ -555,7 +562,7 @@ void MotorCtl::out_step( int direction, bool aForce ) {
 //
 //}
 
-void MotorCtl::homing( std::ostream &aOut ) {
+void MGaxis::homing( std::ostream &aOut ) {
 
     if( !is_availavle() ) {
         //printf( "(seek_origin)invalid motor no %d\n", motor_no );
@@ -672,14 +679,14 @@ void MotorCtl::homing( std::ostream &aOut ) {
 }
 
 
-bool is_availavle( MotorCtl *m ) {
+bool is_availavle( MGaxis *m ) {
     if( m != NULL ) {
         return m->is_availavle();
     }
     return false;
 }
 
-void MotorCtl::show( std::ostream &aOut ) {
+void MGaxis::show( std::ostream &aOut ) {
     aOut << "motor no:" << no() << std::endl;
 
     aOut << "  step angle:"<<mStepAngle;

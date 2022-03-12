@@ -20,8 +20,9 @@
 #include "Gunit.h"
 #include "MGmath.h"
 #include "config.h"
-#include "MotorCtl.h"
+#include "MGaxis.h"
 
+#define QLEN 100
 #define THCMD_00 0
 #define CMD_START_BLOCK 1
 #define CMD_TICK 2
@@ -30,16 +31,16 @@
 
 class GThread {
 private:
-    bool mDbg;
-    long mCostTime_nanosec;
-    long mCostWait_nanosec;
-    long mMinimumWait_usec;
+    bool mDbg = false;
+    long mCostTime_nanosec = 0;
+    long mCostWait_nanosec = 0;
+    long mMinimumWait_nanosec = 0;
 
     std::mutex mMutex;
     std::condition_variable mCV;
 
-    bool mRun;
-    bool mActive;
+    bool mRun = false;
+    bool mActive = false;
     pthread_t mThread;
 
     deg_t mPich[NUM_MOTORS];
@@ -51,13 +52,25 @@ private:
     
     bool mNext;
     string mNextLine;
-    int mNextCmd;
-    usec_t mNextTime;
+    int mNextCmd = 0;
+    usec_t mNextTime = 0;
     step_t mNextStep[NUM_MOTORS];
     
-    MotorCtl mMotors[NUM_MOTORS];
+    int mQ1len = 0;
+    string mQ1_NextLine[QLEN];
+    int mQ1_NextCmd[QLEN];
+    usec_t mQ1_NextTime[QLEN];
+    step_t mQ1_NextStep[QLEN*NUM_MOTORS];
+    
+    int mQ2len = 0;
+    string mQ2_NextLine[QLEN];
+    int mQ2_NextCmd[QLEN];
+    usec_t mQ2_NextTime[QLEN];
+    step_t mQ2_NextStep[QLEN*NUM_MOTORS];
+
+    MGaxis mAxis[NUM_MOTORS];
     double mScale = 1.0;
-    bool mAbort;
+    bool mAbort = false;
     usec_t mDbgWait = 5000;
     
 public:
@@ -92,6 +105,7 @@ public:
     pos_vct step_to_pos( step_vct& aStep );
     step_vct pos_to_step( pos_vct& aPos );
     step_t pos_to_step( int aNo, pos_t aPos );
+    double getPosPerStep( int aNo );
     step_t getCurrentStep( int aNo );
     pos_t getCurrentPos( int aNo );
 public:
@@ -99,10 +113,12 @@ public:
     bool put( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep );
     bool putW( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep );
     bool putW( int aCmd, usec_t aUsec, step_vct& aStep );
-    bool get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[] );
     void setScale( double aScale );
     void setDbgWait( usec_t aWait );
     usec_t getDbgWait();
+private:
+    bool get();
+    bool get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[] );
 };
 
 #endif /* GTHREAD_H */

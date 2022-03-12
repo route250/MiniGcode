@@ -39,8 +39,9 @@ OBJECTFILES= \
 	${OBJECTDIR}/src/GReader.o \
 	${OBJECTDIR}/src/GThread.o \
 	${OBJECTDIR}/src/Gunit.o \
+	${OBJECTDIR}/src/MGaxis.o \
 	${OBJECTDIR}/src/MGmath.o \
-	${OBJECTDIR}/src/MotorCtl.o \
+	${OBJECTDIR}/src/MGstepper.o \
 	${OBJECTDIR}/src/config.o \
 	${OBJECTDIR}/src/main.o
 
@@ -99,15 +100,20 @@ ${OBJECTDIR}/src/Gunit.o: src/Gunit.cpp
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/Gunit.o src/Gunit.cpp
 
+${OBJECTDIR}/src/MGaxis.o: src/MGaxis.cpp
+	${MKDIR} -p ${OBJECTDIR}/src
+	${RM} "$@.d"
+	$(COMPILE.cc) -O2 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MGaxis.o src/MGaxis.cpp
+
 ${OBJECTDIR}/src/MGmath.o: src/MGmath.cpp
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
 	$(COMPILE.cc) -O2 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MGmath.o src/MGmath.cpp
 
-${OBJECTDIR}/src/MotorCtl.o: src/MotorCtl.cpp
+${OBJECTDIR}/src/MGstepper.o: src/MGstepper.cpp
 	${MKDIR} -p ${OBJECTDIR}/src
 	${RM} "$@.d"
-	$(COMPILE.cc) -O2 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MotorCtl.o src/MotorCtl.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MGstepper.o src/MGstepper.cpp
 
 ${OBJECTDIR}/src/config.o: src/config.cpp
 	${MKDIR} -p ${OBJECTDIR}/src
@@ -189,6 +195,19 @@ ${OBJECTDIR}/src/Gunit_nomain.o: ${OBJECTDIR}/src/Gunit.o src/Gunit.cpp
 	    ${CP} ${OBJECTDIR}/src/Gunit.o ${OBJECTDIR}/src/Gunit_nomain.o;\
 	fi
 
+${OBJECTDIR}/src/MGaxis_nomain.o: ${OBJECTDIR}/src/MGaxis.o src/MGaxis.cpp 
+	${MKDIR} -p ${OBJECTDIR}/src
+	@NMOUTPUT=`${NM} ${OBJECTDIR}/src/MGaxis.o`; \
+	if (echo "$$NMOUTPUT" | ${GREP} '|main$$') || \
+	   (echo "$$NMOUTPUT" | ${GREP} 'T main$$') || \
+	   (echo "$$NMOUTPUT" | ${GREP} 'T _main$$'); \
+	then  \
+	    ${RM} "$@.d";\
+	    $(COMPILE.cc) -O2 -Dmain=__nomain -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MGaxis_nomain.o src/MGaxis.cpp;\
+	else  \
+	    ${CP} ${OBJECTDIR}/src/MGaxis.o ${OBJECTDIR}/src/MGaxis_nomain.o;\
+	fi
+
 ${OBJECTDIR}/src/MGmath_nomain.o: ${OBJECTDIR}/src/MGmath.o src/MGmath.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
 	@NMOUTPUT=`${NM} ${OBJECTDIR}/src/MGmath.o`; \
@@ -202,17 +221,17 @@ ${OBJECTDIR}/src/MGmath_nomain.o: ${OBJECTDIR}/src/MGmath.o src/MGmath.cpp
 	    ${CP} ${OBJECTDIR}/src/MGmath.o ${OBJECTDIR}/src/MGmath_nomain.o;\
 	fi
 
-${OBJECTDIR}/src/MotorCtl_nomain.o: ${OBJECTDIR}/src/MotorCtl.o src/MotorCtl.cpp 
+${OBJECTDIR}/src/MGstepper_nomain.o: ${OBJECTDIR}/src/MGstepper.o src/MGstepper.cpp 
 	${MKDIR} -p ${OBJECTDIR}/src
-	@NMOUTPUT=`${NM} ${OBJECTDIR}/src/MotorCtl.o`; \
+	@NMOUTPUT=`${NM} ${OBJECTDIR}/src/MGstepper.o`; \
 	if (echo "$$NMOUTPUT" | ${GREP} '|main$$') || \
 	   (echo "$$NMOUTPUT" | ${GREP} 'T main$$') || \
 	   (echo "$$NMOUTPUT" | ${GREP} 'T _main$$'); \
 	then  \
 	    ${RM} "$@.d";\
-	    $(COMPILE.cc) -O2 -Dmain=__nomain -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MotorCtl_nomain.o src/MotorCtl.cpp;\
+	    $(COMPILE.cc) -O2 -Dmain=__nomain -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/src/MGstepper_nomain.o src/MGstepper.cpp;\
 	else  \
-	    ${CP} ${OBJECTDIR}/src/MotorCtl.o ${OBJECTDIR}/src/MotorCtl_nomain.o;\
+	    ${CP} ${OBJECTDIR}/src/MGstepper.o ${OBJECTDIR}/src/MGstepper_nomain.o;\
 	fi
 
 ${OBJECTDIR}/src/config_nomain.o: ${OBJECTDIR}/src/config.o src/config.cpp 

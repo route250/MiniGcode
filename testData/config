@@ -1,9 +1,10 @@
 #
 x {
   length 35000
-  pich 3600
+  pich 3200
   motor {
-    stepAngle 9.0
+    StepAngle 18.0
+    ExcitationMethod 12
     pinA1 26
     pinA2 27
     pinB1 28
@@ -22,7 +23,8 @@ y {
   length 37000
 #  steps 500
   motor {
-    stepAngle 9.0
+    StepAngle 18.0
+    ExcitationMethod 12
     pinA1 21
     pinA2 22
     pinB1 23
@@ -43,7 +45,8 @@ z {
 #  steps 460
   reverse true
   motor {
-    stepAngle 9.0
+    StepAngle 18.0
+    ExcitationMethod 12
     pinA1 0
     pinA2 1
     pinB1 3

@@ -74,7 +74,7 @@ void GThread::setScale( double aScale ) {
 pos_vct GThread::step_to_pos( step_vct& aStep ) {
     pos_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        aResult[i] = mMotors[i].step_to_pos( aStep[i] ) + mOffsetPos[i];
+        aResult[i] = mAxis[i].step_to_pos( aStep[i] ) + mOffsetPos[i];
     }
     return aResult;
 }
@@ -82,19 +82,23 @@ pos_vct GThread::step_to_pos( step_vct& aStep ) {
 step_vct GThread::pos_to_step( pos_vct& aPos ) {
     step_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        aResult[i] = mMotors[i].pos_to_step( aPos[i] - mOffsetPos[i] );
+        aResult[i] = mAxis[i].pos_to_step( aPos[i] - mOffsetPos[i] );
     }
     return aResult;
 }
 
+double GThread::getPosPerStep( int aNo ) {
+    return mAxis[aNo].getPosPerStep();
+}
+
 step_t GThread::pos_to_step( int aNo, pos_t aPos ) {
-    return mMotors[aNo].pos_to_step( aPos - mOffsetPos[aNo] );
+    return mAxis[aNo].pos_to_step( aPos - mOffsetPos[aNo] );
 }
 step_t GThread::getCurrentStep( int aNo ) {
-    return mMotors[aNo].getCurrentStep();
+    return mAxis[aNo].getCurrentStep();
 }
 pos_t GThread::getCurrentPos( int aNo ) {
-    return mMotors[aNo].getCurrentPos() + mOffsetPos[aNo];
+    return mAxis[aNo].getCurrentPos() + mOffsetPos[aNo];
 }
 
 //------------------------------------------------------------------------------
@@ -103,14 +107,14 @@ pos_t GThread::getCurrentPos( int aNo ) {
 
 bool GThread::configure( config& aConfig ) {
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        mMotors[i].setNo(i);
+        mAxis[i].setNo(i);
         string zPath;
         zPath.push_back( 'x'+i );
 
         int zPich = aConfig.getNumber( zPath + "/pich", -1 );
         int zLength = aConfig.getNumber( zPath + "/length", -1 );
         double zStepAngle = aConfig.getNumber( zPath + "/motor/stepangle", -1 );
-        int zExcitation = aConfig.getBool( zPath + "/motor/excitationmethod", false );
+        int zExcitation = aConfig.getNumber( zPath + "/motor/excitationmethod", -1 );
         if( zStepAngle > 0 ) {
             int n = (360.0/zStepAngle)+0.5;
             if( n> 0 ) {
@@ -134,14 +138,14 @@ bool GThread::configure( config& aConfig ) {
         } else {
             mPich[i] = 0;
         }
-        mMotors[i].setStepAngle( zStepAngle );
-        mMotors[i].setExcitationMethod( zExcitation );
-        mMotors[i].step_size_length( zSteps, zLength );
+        mAxis[i].setStepAngle( zStepAngle );
+        mAxis[i].setExcitationMethod( zExcitation );
+        mAxis[i].step_size_length( zSteps, zLength );
 
         int zOffset = aConfig.getNumber( zPath + "/offset", 0 );
         bool zReverse = aConfig.getBool( zPath + "/reverse", false );
 
-        mMotors[i].setReverse( zReverse );
+        mAxis[i].setReverse( zReverse );
         mOffsetPos[i] = zOffset;
         std::cout << "[config]" << zPath <<" steps:" << zSteps << " length:" << zLength << std::endl;
 
@@ -150,15 +154,15 @@ bool GThread::configure( config& aConfig ) {
         int pinB1 = aConfig.getNumber( zPath + "/motor/pinB1", 0 );
         int pinB2 = aConfig.getNumber( zPath + "/motor/pinB2", 0 );
         std::cout<<"[DBG] A1:" <<pinA1<<std::endl;
-        mMotors[i].setMotorPin( pinA1, pinA2, pinB1, pinB2 );
+        mAxis[i].setMotorPin( pinA1, pinA2, pinB1, pinB2 );
 
         int min = aConfig.getNumber( zPath + "/motor/minpps", -1 );
         if( min > 0 ) {
-            mMotors[i].setMinSpeed(min);
+            mAxis[i].setMinSpeed(min);
         }
         int max = aConfig.getNumber( zPath + "/motor/maxpps", -1 );
         if( max > 0 ) {
-            mMotors[i].setMaxSpeed(max);
+            mAxis[i].setMaxSpeed(max);
         }
         
 
@@ -172,13 +176,13 @@ bool GThread::configure( config& aConfig ) {
                 zPullUD = PUD_UP;
             }
             bool zLogic = aConfig.getBool( zPath + "/home/logic", false );
-            mMotors[i].setHomePin( zPin, zLogic, zPullUD);
+            mAxis[i].setHomePin( zPin, zLogic, zPullUD);
         }
 
     }
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        if( mMotors[i].is_availavle() ) {
-            mMotors[i].init();
+        if( mAxis[i].is_availavle() ) {
+            mAxis[i].init();
         }
     }
     return true;
@@ -186,6 +190,7 @@ bool GThread::configure( config& aConfig ) {
 
 void GThread::adjust(std::ostream &aOut) {
 
+    std::ios_base::fmtflags original_flags = cout.flags();
     long zCostTime_nanosec = 0;
     long zCostWait_nanosec = 0;
     long zMinmumWait_usec = 0;
@@ -193,26 +198,26 @@ void GThread::adjust(std::ostream &aOut) {
     {
         aOut<<"(1)test high_resolution_clock"<<endl;
         int max = 100000;
-        high_resolution_clock::time_point t0 = high_resolution_clock::now();
-        long l = 0, ll = 0;
-        microseconds x(0);
-        nanoseconds t0_nanosec = duration_cast<nanoseconds>(t0.time_since_epoch());
+        high_resolution_clock::time_point start_time = high_resolution_clock::now();
+        long dummy_long = 0;
+        microseconds dummy_ms(0);
+        nanoseconds t0_nanosec = duration_cast<nanoseconds>(start_time.time_since_epoch());
         long zBefore=t0_nanosec.count(), zTotal = 0;
 
-        high_resolution_clock::time_point t;
+        high_resolution_clock::time_point zNow;
         for( int i=0; i<max; i++ ) {
-            t = high_resolution_clock::now();
-            nanoseconds t_nanosec = duration_cast<nanoseconds>(t.time_since_epoch());
+            zNow = high_resolution_clock::now();
+            nanoseconds t_nanosec = duration_cast<nanoseconds>(zNow.time_since_epoch());
             long nanosec = t_nanosec.count();
             zTotal += (nanosec - zBefore);
-            microseconds u = duration_cast<microseconds>(t0-t);
-            x = x + u;
-            long lu = u.count();
-            ll = ll + lu;
+            microseconds u = duration_cast<microseconds>(start_time-zNow);
+            dummy_ms = dummy_ms + u;
+            long dummy_count = u.count();
+            dummy_long = dummy_long + dummy_count;
             zBefore = nanosec;
         }
-        high_resolution_clock::time_point t9 = high_resolution_clock::now();
-        nanoseconds t_last_nanosec = duration_cast<nanoseconds>(t9-t0);
+        high_resolution_clock::time_point end_time = high_resolution_clock::now();
+        nanoseconds t_last_nanosec = duration_cast<nanoseconds>(end_time-start_time);
         long elaps_nanosec = t_last_nanosec.count();
         long ave_long = elaps_nanosec / max;
         aOut<<"    run:"<<max;
@@ -223,11 +228,11 @@ void GThread::adjust(std::ostream &aOut) {
     
     // sleepにかかる時間
     {
-        aOut<<"(2)test nano_sleep"<<endl;
         int max = 200;
+        aOut<<"(2)test nano_sleep run:" << max << endl;
         struct timespec req_time, remaining_time ;
         long zMaxCost = 0;
-        for( int sleep_usec = 50; sleep_usec<=500; sleep_usec += 50 ) {
+        for( int sleep_usec = 0; sleep_usec<=500; sleep_usec += sleep_usec < 50 ? 10 : 50 ) {
             high_resolution_clock::time_point t0 = high_resolution_clock::now();
             long dummy = 0;
             for( int i=0; i<max; i++ ) {
@@ -256,10 +261,8 @@ void GThread::adjust(std::ostream &aOut) {
             long ave_long = elaps_nanosec/max;
             long diff = elaps_nanosec - (sleep_usec * 1000 * max );
             long zCost_nanosec = diff/max;
-            aOut<<"    run:"<<max;
-            aOut<<" sleep:"<<sleep_usec<<"(usec)";
-            aOut<<endl;
-            aOut<<"    total:"<<elaps_nanosec<<"(nanosec)";
+            aOut<<"    sleep:"<<sleep_usec<<"(usec)";
+            aOut<<" total:"<<elaps_nanosec<<"(nanosec)";
             aOut<<" ave:"<<ave_long<<"(nanosec)";
             aOut<<"    over:"<<diff<<"(nanosec)";
             aOut<<" ave:"<<zCost_nanosec<<"(nanosec)";
@@ -275,8 +278,8 @@ void GThread::adjust(std::ostream &aOut) {
     
     // sleepにかかる時間
     {
-        aOut<<"(3)test nano_sleep"<<endl;
         int max = 200;
+        aOut<<"(3)test nano_sleep run:" << max << endl;
         struct timespec req_time, remaining_time ;
         long zMaxCost = 0;
         int sleep_usec = zMinmumWait_usec;
@@ -313,24 +316,28 @@ void GThread::adjust(std::ostream &aOut) {
             long ave_long = elaps_nanosec/max;
             long diff = elaps_nanosec - (sleep_usec * 1000 * max );
             long zCost_nanosec = diff/max;
-            aOut<<"    run:"<<max;
-            aOut<<" sleep:"<<sleep_usec<<"(usec)";
-            aOut<<endl;
-            aOut<<"    total:"<<elaps_nanosec<<"(nanosec)";
+            aOut<<"    sleep:"<<sleep_usec<<"(usec)";
+            aOut<<" total:"<<elaps_nanosec<<"(nanosec)";
             aOut<<" ave:"<<ave_long<<"(nanosec)";
             aOut<<"    over:"<<diff<<"(nanosec)";
             aOut<<" ave:"<<zCost_nanosec<<"(nanosec)";
             aOut<<endl;
         }
     }
+    {
+        long pps = 1000000 / zMinmumWait_usec;
+        aOut << "---" <<endl;
+        aOut << "  max pps:" << pps << "(pps)"<<endl;
+    }
+    aOut.flags( original_flags );
     mCostTime_nanosec = zCostTime_nanosec;
     mCostWait_nanosec = zCostWait_nanosec;
-    mMinimumWait_usec = zMinmumWait_usec;
+    mMinimumWait_nanosec = zMinmumWait_usec * 1000;
 }
 
 bool GThread::isAbort() {
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        if( mMotors[i].isAbort() ) {
+        if( mAxis[i].isAbort() ) {
             return true;
         }
     }
@@ -339,17 +346,17 @@ bool GThread::isAbort() {
 
 void GThread::poff() {
     for( int i = 0;i<NUM_MOTORS; i++ ) {
-        mMotors[i].poff();
+        mAxis[i].poff();
     }
 }
 void GThread::pon() {
     for( int i = 0;i<NUM_MOTORS; i++ ) {
-        mMotors[i].pon();
+        mAxis[i].pon();
     }
 }
 bool GThread::is_power() {
     for( int i = 0;i<NUM_MOTORS; i++ ) {
-        if( !mMotors[i].is_power() ) {
+        if( !mAxis[i].is_power() ) {
             return false;
         }
     }
@@ -358,7 +365,7 @@ bool GThread::is_power() {
 
 bool GThread::isDoneHoming() {
     for( int i = 0;i<NUM_MOTORS; i++ ) {
-        if( !mMotors[i].isDoneHoming() ) {
+        if( !mAxis[i].isDoneHoming() ) {
             return false;
         }
     }
@@ -367,12 +374,14 @@ bool GThread::isDoneHoming() {
 
 void GThread::scan_origin( int aNo, std::ostream &aOut ) {
     if( 0<=aNo && aNo<NUM_MOTORS ) {
-        mMotors[aNo].homing(aOut);
+        mAxis[aNo].homing(aOut);
         mCurrentStep[aNo] = 0;
     }
 }
 bool GThread::set_home( int aNo, std::ostream &aOut ) {
-    aOut<<"not implemented"<<endl;
+    if( 0<=aNo && aNo<NUM_MOTORS ) {
+        return mAxis[aNo].set_home();
+    }
     return false;
 }
 bool GThread::set_limit( int aNo, std::ostream &aOut ) {
@@ -381,7 +390,7 @@ bool GThread::set_limit( int aNo, std::ostream &aOut ) {
 }
 bool GThread::set_zero( int aNo, std::ostream &aOut ) {
     if( 0<=aNo && aNo<NUM_MOTORS ) {
-        pos_t zCurrentPos = mMotors[aNo].getCurrentPos();
+        pos_t zCurrentPos = mAxis[aNo].getCurrentPos();
         pos_t zOff = -zCurrentPos;
         aOut << "offset "<<mOffsetPos[aNo]<<" to "<<zOff<<endl;
         mOffsetPos[aNo] = zOff;
@@ -391,7 +400,7 @@ bool GThread::set_zero( int aNo, std::ostream &aOut ) {
 }
 bool GThread::move( int aNo, step_t aStep, std::ostream &aOut ) {
     if( 0<=aNo && aNo<NUM_MOTORS ) {
-        return mMotors[aNo].move(aStep);
+        return mAxis[aNo].move(aStep);
     }
     return false;
 }
@@ -406,13 +415,14 @@ void *thread_engry( void *p ) {
 }
 
 void GThread::thread_loop() {
+
     mActive = true;
     std::cout << "...started thread\n" << std::endl;
-    if( mCostTime_nanosec == 0 || mCostWait_nanosec == 0 || mMinimumWait_usec == 0 ) {
+    if( mCostTime_nanosec == 0 || mCostWait_nanosec == 0 || mMinimumWait_nanosec == 0 ) {
         adjust(std::cout);
     }
     high_resolution_clock::time_point start = high_resolution_clock::now();
-    int w = 200 * 1000;
+
     int zIdleWait = 200 * 1000000;
     timespec zInterval, zWait, zPausess, remaining_time;
     zInterval.tv_sec = 0;
@@ -424,18 +434,27 @@ void GThread::thread_loop() {
     string zLine;
     usec_t zTargetTime_usec;
     step_t zStep[NUM_MOTORS];
-    long zSlipCount = 0, zCmdCount = 0;
+    long zSlipCount = 0, zCmdCount = 0, zShortIdleCount = 0, zLongIdleCount = 0;
     
     high_resolution_clock::time_point zBlockStartTime = high_resolution_clock::now();
+    high_resolution_clock::time_point zTime1 = high_resolution_clock::now();
+    high_resolution_clock::time_point zTime2 = high_resolution_clock::now();
     while( mRun ) {
 
-        zInterval.tv_nsec = zIdleWait;
-        while( !get( &zCmd, &zLine, &zTargetTime_usec, zStep ) ) {
-            nanosleep( &zInterval, NULL );
-            if( !mRun ) {
-                break;
+        bool ret = get( &zCmd, &zLine, &zTargetTime_usec, zStep );
+        zTime1 = high_resolution_clock::now();
+        if( !ret ) {
+            nanoseconds t_xtime = duration_cast<nanoseconds>( zTime1-zTime2);
+            if( t_xtime.count() > 1000000 ) {
+                zLongIdleCount++;
+                zInterval.tv_nsec = zIdleWait;
+                nanosleep( &zInterval, NULL );
+            } else {
+                zShortIdleCount++;
             }
+            continue;
         }
+        zTime2 = zTime1;
         
         if( zCmd == THCMD_00 ) {
             mCurrentLine = "";
@@ -450,11 +469,13 @@ void GThread::thread_loop() {
             zBlockStartTime = high_resolution_clock::now();
             zCmdCount = 0;
             zSlipCount = 0;
+            zShortIdleCount = 0;
+            zLongIdleCount = 0;
             continue;
         } else if( zCmd == CMD_END_BLOCK ) {
             //std::cout<<"[Thread] End Block"<<std::endl;
             if( zSlipCount>0 ) {
-                cout<<"[Thread] End Block Slip:"<<zSlipCount<<"/"<<zCmdCount<<endl;
+                cout<<"[Thread] End Block Slip:"<<zSlipCount<<"/"<<zCmdCount<<" idle:"<<zShortIdleCount<<","<<zLongIdleCount<<endl;
             }
             mCurrentLine = "";
             continue;
@@ -473,14 +494,14 @@ void GThread::thread_loop() {
         long wait_nanosec = zTargetTime_usec*1000 - t_blocktime.count() - mCostTime_nanosec;
 
         if( wait_nanosec > 0 ) {
-            if( wait_nanosec < mMinimumWait_usec ) {
-                wait_nanosec = mMinimumWait_usec * 1000 - mCostWait_nanosec;
+            if( wait_nanosec < mCostWait_nanosec ) {
+                wait_nanosec = 0;
                 zSlipCount++;
             } else {
                 wait_nanosec = wait_nanosec - mCostWait_nanosec;
             }
             zPausess.tv_sec = wait_nanosec / 1000000000;
-            zPausess.tv_nsec = (wait_nanosec%1000000000);
+            zPausess.tv_nsec = ( wait_nanosec % 1000000000 );
             while( mRun && nanosleep (&zPausess, &remaining_time) != 0 ) {
                 switch( errno ) {
                     case EINTR:
@@ -517,11 +538,11 @@ void GThread::thread_loop() {
                 int d = zStep[i] - mCurrentStep[i];
                 if( d < 0 ) {
                     update = true;
-                    mMotors[i].out_step( -1, false );
+                    mAxis[i].out_step( -1, false );
                     mCurrentStep[i]--;
                 } else if( d > 0 ) {
                     update = true;
-                    mMotors[i].out_step( 1, false );
+                    mAxis[i].out_step( 1, false );
                     mCurrentStep[i]++;
                 }
             }
@@ -571,6 +592,22 @@ void GThread::stop() {
 //
 //------------------------------------------------------------------------------
 
+bool GThread::get() {
+    std::lock_guard<std::mutex> lock(mMutex);
+    if( (QLEN - mQ1len -1) >= mQ2len ) {
+        for( int d=mQ1len,s=0; s<mQ2len; d++,s++ ) {
+            mQ1_NextCmd[d] = mQ1_NextCmd[s];
+            mQ1_NextLine[d] = mQ2_NextCmd[s];
+            mQ1_NextTime[d] = mQ2_NextTime[s];
+            for( int m=0; m<NUM_MOTORS; m++ ) {
+                mQ1_NextStep[d+m] = mQ2_NextStep[s+m];
+            }
+        }
+        mQ1len+=mQ2len;
+        mQ2len = 0;
+    }
+    return false;
+}
 bool GThread::get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[]) {
     std::lock_guard<std::mutex> lock(mMutex);
     if( mNext ) {
@@ -656,12 +693,12 @@ void GThread::show( std::ostream &aOut ) {
     aOut << " Homeing:" <<isDoneHoming();
     aOut << endl;
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        mMotors[i].show( aOut );
+        mAxis[i].show( aOut );
         //
         aOut << "  pich:" <<mPich[i];
         aOut << " offset:" <<mOffsetPos[i];
-        pos_t zC = mMotors[i].getCurrentPos();
-        pos_t zL = mMotors[i].getPosLength();
+        pos_t zC = mAxis[i].getCurrentPos();
+        pos_t zL = mAxis[i].getPosLength();
         aOut << " cur:" << (zC + mOffsetPos[i]);
         aOut << " max:" << (zL + mOffsetPos[i]);
         aOut << endl;

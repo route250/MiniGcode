@@ -6,8 +6,9 @@
       <itemPath>src/GReader.cpp</itemPath>
       <itemPath>src/GThread.cpp</itemPath>
       <itemPath>src/Gunit.cpp</itemPath>
+      <itemPath>src/MGaxis.cpp</itemPath>
       <itemPath>src/MGmath.cpp</itemPath>
-      <itemPath>src/MotorCtl.cpp</itemPath>
+      <itemPath>src/MGstepper.cpp</itemPath>
       <itemPath>src/config.cpp</itemPath>
       <itemPath>src/main.cpp</itemPath>
     </logicalFolder>
@@ -16,8 +17,9 @@
       <itemPath>src/GReader.h</itemPath>
       <itemPath>src/GThread.h</itemPath>
       <itemPath>src/Gunit.h</itemPath>
+      <itemPath>src/MGaxis.h</itemPath>
       <itemPath>src/MGmath.h</itemPath>
-      <itemPath>src/MotorCtl.h</itemPath>
+      <itemPath>src/MGstepper.h</itemPath>
       <itemPath>src/config.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ResourceFiles" displayName="リソース・ファイル" projectFiles="true">
@@ -81,13 +83,17 @@
       </item>
       <item path="src/Gunit.h" ex="false" tool="3" flavor2="0">
       </item>
+      <item path="src/MGaxis.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MGaxis.h" ex="false" tool="3" flavor2="0">
+      </item>
       <item path="src/MGmath.cpp" ex="false" tool="1" flavor2="0">
       </item>
       <item path="src/MGmath.h" ex="false" tool="3" flavor2="0">
       </item>
-      <item path="src/MotorCtl.cpp" ex="false" tool="1" flavor2="0">
+      <item path="src/MGstepper.cpp" ex="false" tool="1" flavor2="0">
       </item>
-      <item path="src/MotorCtl.h" ex="false" tool="3" flavor2="0">
+      <item path="src/MGstepper.h" ex="false" tool="3" flavor2="0">
       </item>
       <item path="src/config.cpp" ex="false" tool="1" flavor2="0">
       </item>
@@ -149,13 +155,17 @@
       </item>
       <item path="src/Gunit.h" ex="false" tool="3" flavor2="0">
       </item>
+      <item path="src/MGaxis.cpp" ex="false" tool="1" flavor2="0">
+      </item>
+      <item path="src/MGaxis.h" ex="false" tool="3" flavor2="0">
+      </item>
       <item path="src/MGmath.cpp" ex="false" tool="1" flavor2="0">
       </item>
       <item path="src/MGmath.h" ex="false" tool="3" flavor2="0">
       </item>
-      <item path="src/MotorCtl.cpp" ex="false" tool="1" flavor2="0">
+      <item path="src/MGstepper.cpp" ex="false" tool="1" flavor2="0">
       </item>
-      <item path="src/MotorCtl.h" ex="false" tool="3" flavor2="0">
+      <item path="src/MGstepper.h" ex="false" tool="3" flavor2="0">
       </item>
       <item path="src/config.cpp" ex="false" tool="1" flavor2="0">
       </item>

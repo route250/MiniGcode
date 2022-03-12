@@ -77,7 +77,7 @@ double getPosPerUsec( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
         zFeed = (double) zBlk.getFeed( );
         if( zFeed <= 0 ) {
             zOut << "ERROR:feed=0.0 use 400.0" << endl;
-            zFeed = 400.;
+            zFeed = 400000;
         }
     }
     // 送り速度(pos/min)から pos/usec つまり um/usecに変換
@@ -109,6 +109,7 @@ struct line_move_data {
     // 移動にかける時間
     double total_time;
     
+    int count = 0;
     // 現在のステップ(開始位置をゼロとして)
     step_t step;
     // 現在の時間
@@ -125,6 +126,7 @@ struct line_move_data {
      * @param aTimeUsec
      */
     void init( pos_t aStart, pos_t aEnd, double aPosPerStep, double aTimeUsec ) {
+        count = 0;
         step=0;
         current_time_usec=0;
         start_pos = aStart;
@@ -147,13 +149,23 @@ struct line_move_data {
      * 次の位置を計算
      */
     void next() {
-        step++;
-        if( step<total_steps ) {
+        count++;
+        if( length_pos >= 0 ) {
+            step++;
+        } else {
+            step--;
+        }
+        if( count<total_steps ) {
             current_time_usec = next_time_usec;
-            next_time_usec = step * usec_per_step + usec_per_step;
+            next_time_usec = count * usec_per_step + usec_per_step;
             current_pos = start_pos + std::round( pos_per_usec * current_time_usec );
         } else {
-            step = total_steps;
+            count = total_steps;
+            if( length_pos >= 0 ) {
+                step = total_steps;
+            } else {
+                step = -total_steps;
+            }
             current_time_usec = total_time;
             next_time_usec = total_time;
             current_pos = end_pos;
@@ -256,52 +268,51 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
 //    }
 //    
     zThread.send_start_block( zRawLine, zCurrentStep );
-    // 計算ステップ
-    double zStepUsec = 10;
-    // 移動ループ
-    for( double zUsec = zStepUsec; !zThread.isAbort( ); zUsec += zStepUsec ) {
-        bool update = false;
-        if( zUsec < zTotalUsec ) {
-            for( int i = 0; i < NUM_MOTORS; i++ ) {
-                double zDoublePos = zXYZ_Start[i] + zVector[i] * zUsec;
-                pos_t zPos = double_to_pos( zDoublePos );
-                step_t zStep = zThread.pos_to_step( i, zPos );
-                if( zCurrentStep[i] != zStep ) {
-                    update = true;
-                    zCurrentStep[i] = zStep;
-                }
-            }
-        } else {
-            zUsec = zTotalUsec;
-            for( int i = 0; i < NUM_MOTORS; i++ ) {
-                step_t zStep = zThread.pos_to_step( i, zPos_End[i] );
-                if( zCurrentStep[i] != zStep ) {
-                    update = true;
-                    zCurrentStep[i] = zStep;
-                }
-            }
-        }
-        if( update || zUsec >= zTotalUsec ) {
-            // stepが変わったら信号を送る
-            zThread.send_step( zUsec, zCurrentStep );
-        }
-        if( zUsec >= zTotalUsec ) {
-            break;
-        }
-    }
+//    // 計算ステップ
+//    double zStepUsec = 10;
+//    // 移動ループ
+//    for( double zUsec = zStepUsec; !zThread.isAbort( ); zUsec += zStepUsec ) {
+//        bool update = false;
+//        if( zUsec < zTotalUsec ) {
+//            for( int i = 0; i < NUM_MOTORS; i++ ) {
+//                double zDoublePos = zXYZ_Start[i] + zVector[i] * zUsec;
+//                pos_t zPos = double_to_pos( zDoublePos );
+//                step_t zStep = zThread.pos_to_step( i, zPos );
+//                if( zCurrentStep[i] != zStep ) {
+//                    update = true;
+//                    zCurrentStep[i] = zStep;
+//                }
+//            }
+//        } else {
+//            zUsec = zTotalUsec;
+//            for( int i = 0; i < NUM_MOTORS; i++ ) {
+//                step_t zStep = zThread.pos_to_step( i, zPos_End[i] );
+//                if( zCurrentStep[i] != zStep ) {
+//                    update = true;
+//                    zCurrentStep[i] = zStep;
+//                }
+//            }
+//        }
+//        if( update || zUsec >= zTotalUsec ) {
+//            // stepが変わったら信号を送る
+//            zThread.send_step( zUsec, zCurrentStep );
+//        }
+//        if( zUsec >= zTotalUsec ) {
+//            break;
+//        }
+//    }
     
-    
-    cout << "length:"<<zLength <<"(pos)"<< endl;
-    cout << "time:"<<zTotalUsec<<"(usec)"<<endl;
-    
-    double zSS[] = {300,200,100};
-    
+    //cout << "length:"<<zLength <<"(pos)"<< endl;
+    //cout << "time:"<<zTotalUsec<<"(usec)"<<endl;
+      
     line_move_data zMV[NUM_MOTORS];
+     step_vct zXxxStep = zCurrentStep;
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        zMV[i].init( zXYZ_Start[i], zXYZ_End[i], zSS[i], zTotalUsec );
+        double zPosPerStep = zThread.getPosPerStep( i );
+        zMV[i].init( zXYZ_Start[i], zXYZ_End[i], zPosPerStep, zTotalUsec );
     }
     
-    cout << "-----------------" <<endl;
+    //cout << "-----------------" <<endl;
     double zMinimumTime_usec = 50.0;
 
     double zNextTime1 = 0.0;
@@ -319,6 +330,11 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
             if( zMV[i].next( zNextTime1,zNextTime2) ) {
             }
         }
+        for( int i=0;i<NUM_MOTORS; i++ ) {
+            zCurrentStep[i] = zXxxStep[i] + zMV[i].step;
+        }
+        zThread.send_step( zNextTime1, zCurrentStep );
+        
 //        cout<< fixed << setprecision(4);
 //        cout<<" t:"<<zNextTime1;
 //        for( int i=0;i<NUM_MOTORS; i++ ) {
@@ -473,7 +489,6 @@ void G02( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
         xCurrentPos[i] = zPos_End[i];
     }
     zThread.send_end_block( zCurrentStep );
-
 
 }
 
@@ -630,7 +645,7 @@ int main( int argc, char** argv ) {
                 int zNo = to_axis( zArgs, 1 );
                 if( zNo >= 0 ) {
                     if( zThread.set_home( zNo, zOut ) ) {
-                        zOut << "((set_home))ERROR:" << endl;
+                        zOut << "((set_home))OK:" << endl;
                     } else {
                         zOut << "((set_home))ERROR:" << endl;
                     }
@@ -729,6 +744,8 @@ int main( int argc, char** argv ) {
                     zThread.setDbgWait( zOffsetx );
                 }
                 zOut << "((DbgWait))" << zThread.getDbgWait( ) << endl;
+            } else {
+                zOut << "invalid command" << endl;
             }
             for( int i = 0; i < NUM_MOTORS; i++ ) {
                 xCurrentPos[i] = zThread.getCurrentPos( i );

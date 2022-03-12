@@ -11,20 +11,21 @@
  * Created on 2022年2月17日, 0:55
  */
 
-#ifndef SMOTOR_H
-#define SMOTOR_H
+#ifndef MG_AXIS_H
+#define MG_AXIS_H
 
 #include <wiringPi.h>
 
 #include "Gunit.h"
 #include "MGmath.h"
+#include "MGaxis.h"
+#include "MGstepper.h"
 
 #define NUM_PHASE 8
 
-class MotorCtl {
+class MGaxis {
 private:
     int mNo = 0;
-
     deg_t mStepAngle = 0;
     step_t mMinSpeed = 0;
     step_t mMaxSpeed = 0;
@@ -36,6 +37,7 @@ private:
     double mPosPerStep = 0;
     double mStepPerPos = 0;
 
+    MGstepper mStepper;
     int mExcitationMethod = 0;
     int mAssignA1 = 0;
     int mAssignA2 = 0;
@@ -73,12 +75,13 @@ public:
     step_t target_step = 0;
     
     // コンストラクタ
-    MotorCtl();
-    MotorCtl( int no );
-    virtual ~MotorCtl();
+    MGaxis();
+    MGaxis( int no );
+    virtual ~MGaxis();
     // メソッド
     void setNo( int aNo );
     int no();
+
     void setMotorPin( int a, int b, int c, int d );
     void setHomePin( int no, bool logic, int pull_updn );
     void pin_reset();
@@ -131,21 +134,21 @@ public:
     
     step_t pos_to_step( pos_t aPos );
     pos_t step_to_pos( step_t aStep );
-    
+    double getPosPerStep();
     step_t getCurrentStep();
     pos_t getCurrentPos();
 private:
-    void operator =(const MotorCtl &src) {}
-    MotorCtl(const MotorCtl &src) {}
+    void operator =(const MGaxis &src) {}
+    MGaxis(const MGaxis &src) {}
 private:
     void update_config();
 
 };
 
-extern bool is_availavle( MotorCtl *m );
-extern void print_motor( MotorCtl *m );
+extern bool is_availavle( MGaxis *m );
+extern void print_motor( MGaxis *m );
 
 void print_pin( std::ostream &aOut, int pin );
 
-#endif /* SMOTOR_H */
+#endif /* MG_AXIS_H */
 
