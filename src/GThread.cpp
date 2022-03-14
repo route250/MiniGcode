@@ -434,18 +434,21 @@ void GThread::thread_loop() {
     string zLine;
     usec_t zTargetTime_usec;
     step_t zStep[NUM_MOTORS];
-    long zSlipCount = 0, zCmdCount = 0, zShortIdleCount = 0, zLongIdleCount = 0;
+    long zCmdCount = 0, zShortIdleCount = 0, zLongIdleCount = 0;
+    long zSlipCountA = 0, zSlipMinA = 0, zSlipMaxA = 0;
+    long zSlipCountB = 0, zSlipMinB = 0, zSlipMaxB = 0;
     
     high_resolution_clock::time_point zBlockStartTime = high_resolution_clock::now();
-    high_resolution_clock::time_point zTime1 = high_resolution_clock::now();
-    high_resolution_clock::time_point zTime2 = high_resolution_clock::now();
+    high_resolution_clock::time_point zNow = high_resolution_clock::now();
+    high_resolution_clock::time_point zLastTime = high_resolution_clock::now();
+    
     while( mRun ) {
 
-        bool ret = get( &zCmd, &zLine, &zTargetTime_usec, zStep );
-        zTime1 = high_resolution_clock::now();
+        bool ret = recieve_cmd( &zCmd, &zLine, &zTargetTime_usec, zStep );
+        zNow = high_resolution_clock::now();
         if( !ret ) {
-            nanoseconds t_xtime = duration_cast<nanoseconds>( zTime1-zTime2);
-            if( t_xtime.count() > 1000000 ) {
+            nanoseconds t_xtime = duration_cast<nanoseconds>( zNow-zLastTime);
+            if( t_xtime.count() > 1000000000 ) {
                 zLongIdleCount++;
                 zInterval.tv_nsec = zIdleWait;
                 nanosleep( &zInterval, NULL );
@@ -454,28 +457,31 @@ void GThread::thread_loop() {
             }
             continue;
         }
-        zTime2 = zTime1;
+        zLastTime = zNow;
         
         if( zCmd == THCMD_00 ) {
             mCurrentLine = "";
             std::cout<<"[Thread] Start00"<<std::endl;
             zIdleWait = 500 * 1000000;
-            zBlockStartTime = high_resolution_clock::now();
+            zBlockStartTime = zNow;
             continue;
         } else if( zCmd == CMD_START_BLOCK ) {
             //std::cout<<"[Thread] Start Block"<<std::endl;
             mCurrentLine = zLine;
             zIdleWait = 20 * 1000000;
-            zBlockStartTime = high_resolution_clock::now();
+            zBlockStartTime = zNow;
             zCmdCount = 0;
-            zSlipCount = 0;
+            zSlipCountA = 0; zSlipMinA = 0; zSlipMaxA = 0;
+            zSlipCountB = 0; zSlipMinB = 0; zSlipMaxB = 0;
             zShortIdleCount = 0;
             zLongIdleCount = 0;
             continue;
         } else if( zCmd == CMD_END_BLOCK ) {
             //std::cout<<"[Thread] End Block"<<std::endl;
-            if( zSlipCount>0 ) {
-                cout<<"[Thread] End Block Slip:"<<zSlipCount<<"/"<<zCmdCount<<" idle:"<<zShortIdleCount<<","<<zLongIdleCount<<endl;
+            if( zSlipCountA > 0 || zSlipCountB > 0 ) {
+                cout<<"[Thread] End Block count:"<<zCmdCount<<" idle:"<<zShortIdleCount<<","<<zLongIdleCount<<endl;
+                cout<<"                   slipA:"<<zSlipCountA<<" "<<zSlipMinA<<" - "<<zSlipMaxA<<endl;
+                cout<<"                   slipB:"<<zSlipCountB<<" "<<zSlipMinB<<" - "<<zSlipMaxB<<endl;
             }
             mCurrentLine = "";
             continue;
@@ -488,35 +494,60 @@ void GThread::thread_loop() {
         }
        
         zCmdCount++;
-        // 指定時間まで待機
-        high_resolution_clock::time_point now = high_resolution_clock::now();
-        nanoseconds t_blocktime = duration_cast<nanoseconds>(now-zBlockStartTime);
-        long wait_nanosec = zTargetTime_usec*1000 - t_blocktime.count() - mCostTime_nanosec;
+        // 実時間で経過時間を計算
+        nanoseconds t_blocktime = duration_cast<nanoseconds>(zNow-zBlockStartTime);
+        // 待機時間を計算
+        long wait_nanosec = (zTargetTime_usec*1000) - t_blocktime.count() - mCostTime_nanosec;
 
         if( wait_nanosec > 0 ) {
+            // 余裕がある
             if( wait_nanosec < mCostWait_nanosec ) {
-                wait_nanosec = 0;
-                zSlipCount++;
-            } else {
-                wait_nanosec = wait_nanosec - mCostWait_nanosec;
-            }
-            zPausess.tv_sec = wait_nanosec / 1000000000;
-            zPausess.tv_nsec = ( wait_nanosec % 1000000000 );
-            while( mRun && nanosleep (&zPausess, &remaining_time) != 0 ) {
-                switch( errno ) {
-                    case EINTR:
-                        zPausess.tv_sec = remaining_time.tv_sec;
-                        zPausess.tv_nsec = remaining_time.tv_nsec;
-                        continue;
-                    default:
-                        std::cerr << "ERROR:nanosleep return " << errno <<" : ";
-                        std::perror(NULL);
-                        break;
+                // nanosleepでは間に合わない
+                zSlipCountA++;
+                if( zSlipMinA == 0 ) {
+                    zSlipMinA = wait_nanosec;
+                    zSlipMaxA = wait_nanosec;
+                } else if( wait_nanosec > zSlipMaxA ) {
+                    zSlipMaxA = wait_nanosec;
+                } else if( wait_nanosec < zSlipMinA ) {
+                    zSlipMinA = wait_nanosec;
                 }
-                break;
+                // 指定時間までループで待機
+                while( mRun && wait_nanosec > 0 ) {
+                    high_resolution_clock::time_point zNow2 = high_resolution_clock::now();
+                    t_blocktime = duration_cast<nanoseconds>(zNow2-zBlockStartTime);
+                    wait_nanosec = (zTargetTime_usec*1000) - t_blocktime.count() - mCostTime_nanosec;
+                }
+            } else {
+                // 指定時間までnanosleepで待機
+                wait_nanosec = wait_nanosec - mCostWait_nanosec;
+                zPausess.tv_sec = wait_nanosec / 1000000000;
+                zPausess.tv_nsec = ( wait_nanosec % 1000000000 );
+                while( mRun && nanosleep (&zPausess, &remaining_time) != 0 ) {
+                    switch( errno ) {
+                        case EINTR:
+                            zPausess.tv_sec = remaining_time.tv_sec;
+                            zPausess.tv_nsec = remaining_time.tv_nsec;
+                            continue;
+                        default:
+                            std::cerr << "ERROR:nanosleep return " << errno <<" : ";
+                            std::perror(NULL);
+                            break;
+                    }
+                    break;
+                }
             }
         } else if( wait_nanosec < 0 ) {
-            zSlipCount++;
+            // 時間が過ぎてる！
+            zSlipCountB++;
+            if( zSlipMinB == 0 ) {
+                zSlipMinB = wait_nanosec;
+                zSlipMaxB = wait_nanosec;
+            } else if( wait_nanosec > zSlipMaxB ) {
+                zSlipMaxB = wait_nanosec;
+            } else if( wait_nanosec < zSlipMinB ) {
+                zSlipMinB = wait_nanosec;
+            }
         }
 
         if( !mRun ) {
@@ -533,35 +564,33 @@ void GThread::thread_loop() {
         }
         bool update = true;
         while( update ) {
+            // 移動する
+            for( int i=0; i<NUM_MOTORS; i++ ) {
+                int d = zStep[i] - mCurrentStep[i];
+                if( d < 0 ) {
+                    mAxis[i].out_step( -1, false );
+                    mCurrentStep[i]--;
+                } else if( d > 0 ) {
+                    mAxis[i].out_step( 1, false );
+                    mCurrentStep[i]++;
+                }
+            }
+            // 追加の移動がある？
             update = false;
             for( int i=0; i<NUM_MOTORS; i++ ) {
                 int d = zStep[i] - mCurrentStep[i];
                 if( d < 0 ) {
                     update = true;
-                    mAxis[i].out_step( -1, false );
-                    mCurrentStep[i]--;
                 } else if( d > 0 ) {
                     update = true;
-                    mAxis[i].out_step( 1, false );
-                    mCurrentStep[i]++;
                 }
             }
-//            std::cout<<"seek to ";
-//            for( int i=0; i<NUM_MOTORS;i++) {
-//                std::cout<<" ";
-//                out_step( std::cout, zStep[i]);
-//            }
-//            std::cout<<" current ";
-//            for( int i=0; i<NUM_MOTORS;i++) {
-//                std::cout<<" ";
-//                out_step( std::cout, mCurrentStep[i]);
-//            }
-//            std::cout<<std::endl;
-            if( update ) {
-                nanosleep( &zWait, NULL );
-            } else {
+            
+            if( !update ) {
+                // 移動終了
                 break;
             }
+            nanosleep( &zWait, NULL );
         }
 
     }
@@ -592,21 +621,46 @@ void GThread::stop() {
 //
 //------------------------------------------------------------------------------
 
-bool GThread::get() {
+bool GThread::__queue_copy() {
     std::lock_guard<std::mutex> lock(mMutex);
-    if( (QLEN - mQ1len -1) >= mQ2len ) {
-        for( int d=mQ1len,s=0; s<mQ2len; d++,s++ ) {
-            mQ1_NextCmd[d] = mQ1_NextCmd[s];
-            mQ1_NextLine[d] = mQ2_NextCmd[s];
-            mQ1_NextTime[d] = mQ2_NextTime[s];
-            for( int m=0; m<NUM_MOTORS; m++ ) {
-                mQ1_NextStep[d+m] = mQ2_NextStep[s+m];
-            }
+    if( (QLEN - mQ1len) >= mCmdSend_length ) {
+        for( int dst=mQ1len,src=0; src<mCmdSend_length; dst++,src++ ) {
+            mQ1_NextCmd[dst] = mCmdSend_cmd[src];
+            mQ1_NextLine[dst] = mCmdSend_cmd[src];
+            mQ1_NextTime[dst] = mCmdSend_time[src];
         }
-        mQ1len+=mQ2len;
-        mQ2len = 0;
+        for( int dst=mQ1len*NUM_MOTORS,src=0; src<mCmdSend_length*NUM_MOTORS; dst++,src++ ) {
+            mQ1_NextStep[dst] = mCmdSend_step[src];
+        }
+        mQ1len+=mCmdSend_length;
+        mCmdSend_length = 0;
     }
     return false;
+}
+
+bool GThread::recieve_cmd(int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[]) {
+    if( mQ1len <= 0 ) {
+        __queue_copy();
+    }
+    if( mQ1len <= 0 ) {
+        return false;
+    }
+    *aCmd = mQ1_NextCmd[0];
+    *aLine = mQ1_NextLine[0];
+    *aUsec = mQ1_NextTime[0];
+    for( int m=0; m<NUM_MOTORS; m++ ) {
+        aStep[m] = mQ1_NextStep[m];
+    }
+    for( int dst=0,src=1; src<mQ1len; dst++,src++ ) {
+        mQ1_NextCmd[dst] = mQ1_NextCmd[src];
+        mQ1_NextLine[dst] = mQ1_NextCmd[src];
+        mQ1_NextTime[dst] = mQ1_NextTime[src];
+    }
+    for( int dst=0,src=NUM_MOTORS; src<mQ1len*NUM_MOTORS; dst++,src++ ) {
+        mQ1_NextStep[dst] = mQ1_NextStep[src];
+    }
+    mQ1len--;
+    return true;
 }
 bool GThread::get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[]) {
     std::lock_guard<std::mutex> lock(mMutex);
@@ -619,6 +673,22 @@ bool GThread::get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[]) {
         }
         mNextTime = 0;
         mNext = false;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool GThread::send_cmd( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep ) {
+    std::lock_guard<std::mutex> lock(mMutex);
+    if( mCmdSend_length < QLEN ) {
+        for( int src=0,dst=mCmdSend_length*NUM_MOTORS; src<NUM_MOTORS; src++,dst++ ) {
+            mCmdSend_step[dst] = aStep[src];
+        }
+        mCmdSend_time[mCmdSend_length] = aUsec;
+        mCmdSend_line[mCmdSend_length] = aLine;
+        mCmdSend_cmd[mCmdSend_length] = aCmd;
+        mCmdSend_length++;
         return true;
     } else {
         return false;
@@ -645,25 +715,27 @@ bool GThread::putW( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep ) {
      if( !mRun ) {
          start();
      }
-     while( !put( aCmd, aLine, aUsec, aStep ) ) {
-        timespec zInterval = {0, 200*1000 };
+    timespec zInterval = {0, 300*1000*1000 };
+     while( mRun && !send_cmd( aCmd, aLine, aUsec, aStep ) ) {
         nanosleep( &zInterval, NULL );
      }
-     return true;
+     return mRun;
 }
 bool GThread::putW( int aCmd, usec_t aUsec, step_vct& aStep ) {
      if( !mRun ) {
          start();
      }
     string BLANK = "";
-     while( !put( aCmd, BLANK, aUsec, aStep ) ) {
-        timespec zInterval = {0, 20*1000 };
+    timespec zInterval = {0, 200*1000 };
+     while( !send_cmd( aCmd, BLANK, aUsec, aStep ) ) {
         nanosleep( &zInterval, NULL );
      }
      return true;
 }
+
 bool GThread::send00( step_vct& aStep ) {
-    return putW( THCMD_00, 0, aStep );
+    string BLANK = "";
+    return putW( THCMD_00, BLANK, 0, aStep );
 }
 
 bool GThread::send_start_block( string& aLine, step_vct& aStep ) {

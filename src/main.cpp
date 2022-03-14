@@ -201,7 +201,7 @@ struct line_move_data {
  * @param zThread
  * @param zBlk
  */
-void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
+void G01_old( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
 
     int zCode = zBlk.getCode( );
     string zRawLine = zBlk.getLine( );
@@ -255,101 +255,152 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
     out_step( zOut, end );
     zOut << endl;
 
-//    int zI[NUM_MOTORS];
-//    double zDT[NUM_MOTORS];
-//    for( int i=0; i<NUM_MOTORS; i++ ) {
-//        zI[i] = 0;
-//        long ds = end[i] - zCurrentStep[i];
-//        if( ds > 0 ) {
-//            zDT[i] = zTotalUsec/ds;
-//        } else {
-//            zDT[i] = zTotalUsec;
-//        }
-//    }
-//    
+    int zI[NUM_MOTORS];
+    double zDT[NUM_MOTORS];
+    for( int i=0; i<NUM_MOTORS; i++ ) {
+        zI[i] = 0;
+        long ds = end[i] - zCurrentStep[i];
+        if( ds > 0 ) {
+            zDT[i] = zTotalUsec/ds;
+        } else {
+            zDT[i] = zTotalUsec;
+        }
+    }
+    
     zThread.send_start_block( zRawLine, zCurrentStep );
-//    // 計算ステップ
-//    double zStepUsec = 10;
-//    // 移動ループ
-//    for( double zUsec = zStepUsec; !zThread.isAbort( ); zUsec += zStepUsec ) {
-//        bool update = false;
-//        if( zUsec < zTotalUsec ) {
-//            for( int i = 0; i < NUM_MOTORS; i++ ) {
-//                double zDoublePos = zXYZ_Start[i] + zVector[i] * zUsec;
-//                pos_t zPos = double_to_pos( zDoublePos );
-//                step_t zStep = zThread.pos_to_step( i, zPos );
-//                if( zCurrentStep[i] != zStep ) {
-//                    update = true;
-//                    zCurrentStep[i] = zStep;
-//                }
-//            }
-//        } else {
-//            zUsec = zTotalUsec;
-//            for( int i = 0; i < NUM_MOTORS; i++ ) {
-//                step_t zStep = zThread.pos_to_step( i, zPos_End[i] );
-//                if( zCurrentStep[i] != zStep ) {
-//                    update = true;
-//                    zCurrentStep[i] = zStep;
-//                }
-//            }
-//        }
-//        if( update || zUsec >= zTotalUsec ) {
-//            // stepが変わったら信号を送る
-//            zThread.send_step( zUsec, zCurrentStep );
-//        }
-//        if( zUsec >= zTotalUsec ) {
-//            break;
-//        }
-//    }
+    // 計算ステップ
+    double zStepUsec = 10;
+    // 移動ループ
+    for( double zUsec = zStepUsec; !zThread.isAbort( ); zUsec += zStepUsec ) {
+        bool update = false;
+        if( zUsec < zTotalUsec ) {
+            for( int i = 0; i < NUM_MOTORS; i++ ) {
+                double zDoublePos = zXYZ_Start[i] + zVector[i] * zUsec;
+                pos_t zPos = double_to_pos( zDoublePos );
+                step_t zStep = zThread.pos_to_step( i, zPos );
+                if( zCurrentStep[i] != zStep ) {
+                    update = true;
+                    zCurrentStep[i] = zStep;
+                }
+            }
+        } else {
+            zUsec = zTotalUsec;
+            for( int i = 0; i < NUM_MOTORS; i++ ) {
+                step_t zStep = zThread.pos_to_step( i, zPos_End[i] );
+                if( zCurrentStep[i] != zStep ) {
+                    update = true;
+                    zCurrentStep[i] = zStep;
+                }
+            }
+        }
+        if( update || zUsec >= zTotalUsec ) {
+            // stepが変わったら信号を送る
+            zThread.send_step( zUsec, zCurrentStep );
+        }
+        if( zUsec >= zTotalUsec ) {
+            break;
+        }
+    }
     
     //cout << "length:"<<zLength <<"(pos)"<< endl;
     //cout << "time:"<<zTotalUsec<<"(usec)"<<endl;
       
-    line_move_data zMV[NUM_MOTORS];
-     step_vct zXxxStep = zCurrentStep;
+
+    for( int i = 0; i < NUM_MOTORS; i++ ) {
+        xCurrentPos[i] = zPos_End[i];
+    }
+    zThread.send_end_block( zCurrentStep );
+
+}
+
+/**
+ * 直線移動計算
+ * 
+ * @param zOut
+ * @param zThread
+ * @param zBlk
+ */
+void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
+
+    string zRawLine = zBlk.getLine( );
+    
+    // 直線移動
+    // G00 最高速度で移動
+    // G01 指定速度で移動
+
+    // 開始位置
+    pos_vct zPos_Start = zBlk.getCurrent( );
+    // 終了位置
+    pos_vct zPos_End = zBlk.getTarget( );
+    // 送り速度
+    double zPosPerUsec = getPosPerUsec( zOut, zThread, zBlk );
+
+    if( !vct::is_ok( zPos_Start ) ) {
+        zOut << "ERROR:invalid start pos " << endl;
+        return;
+    }
+    if( !vct::is_ok( zPos_End ) ) {
+        zOut << "ERROR:invalid end pos " << endl;
+        return;
+    }
+
+    // 開始位置(実数化)
+    double_vct zXYZ_Start = vct::from_pos( zPos_Start );
+    double_vct zXYZ_End = vct::from_pos( zPos_End );
+    zOut << " diff ";
+    out_pos( zOut, zPos_Start );
+    zOut << "->";
+    out_pos( zOut, zPos_End );
+    zOut << endl;
+    
+    // 移動ベクトル
+    double_vct zXYZ_Vector = vct::diff( zXYZ_End, zXYZ_Start );
+    // 移動距離を計算
+    double zLength = vct::length( zXYZ_Vector );
+    // 移動にかかる時間を計算
+    long zTotalUsec = zLength / zPosPerUsec;
+
+    // 現時点の位置を初期化
+    step_vct zStep_Start = zThread.pos_to_step( zPos_Start );
+    step_vct zStep_End = zThread.pos_to_step( zPos_End );
+    step_vct zCurrentStep = zStep_Start;
+
+    zOut << "move ";    out_pos( zOut, zPos_Start );    out_step( zOut, zStep_Start );
+    zOut << " to ";    out_pos( zOut, zPos_End );    out_step( zOut, zStep_End );
+    zOut << " length:"<<zLength <<"(pos)";
+    zOut << " time:"<<zTotalUsec<<"(usec)";
+    zOut << endl;
+      
+    line_move_data zData[NUM_MOTORS];
     for( int i=0; i<NUM_MOTORS; i++ ) {
         double zPosPerStep = zThread.getPosPerStep( i );
-        zMV[i].init( zXYZ_Start[i], zXYZ_End[i], zPosPerStep, zTotalUsec );
+        zData[i].init( zXYZ_Start[i], zXYZ_End[i], zPosPerStep, zTotalUsec );
     }
     
-    //cout << "-----------------" <<endl;
     double zMinimumTime_usec = 50.0;
 
+    zThread.send_start_block( zRawLine, zStep_Start );
+    
     double zNextTime1 = 0.0;
     while( zNextTime1 < zTotalUsec ) {
 
         zNextTime1 = zTotalUsec;
         for( int i=0;i<NUM_MOTORS; i++ ) {
-            if( zMV[i].next_time_usec < zNextTime1 ) {
-                zNextTime1 = zMV[i].next_time_usec;
+            if( zData[i].next_time_usec < zNextTime1 ) {
+                zNextTime1 = zData[i].next_time_usec;
             }
         }
         double zNextTime2 = zNextTime1 + zMinimumTime_usec;
 
         for( int i=0;i<NUM_MOTORS; i++ ) {
-            if( zMV[i].next( zNextTime1,zNextTime2) ) {
+            if( zData[i].next( zNextTime1,zNextTime2) ) {
             }
         }
         for( int i=0;i<NUM_MOTORS; i++ ) {
-            zCurrentStep[i] = zXxxStep[i] + zMV[i].step;
+            zCurrentStep[i] = zStep_Start[i] + zData[i].step;
         }
         zThread.send_step( zNextTime1, zCurrentStep );
-        
-//        cout<< fixed << setprecision(4);
-//        cout<<" t:"<<zNextTime1;
-//        for( int i=0;i<NUM_MOTORS; i++ ) {
-//            cout<< " "<<zMV[i].step<<"/"<<zMV[i].total_steps;
-//        }
-//        for( int i=0;i<NUM_MOTORS; i++ ) {
-//            if( i==0 ) {
-//                cout << " (";
-//            } else {
-//                cout << ",";
-//            }
-//            cout<<zMV[i].current_pos;
-//        }
-//        cout<<")";
-//        cout<<endl;
+
     }
     for( int i = 0; i < NUM_MOTORS; i++ ) {
         xCurrentPos[i] = zPos_End[i];
@@ -642,12 +693,19 @@ int main( int argc, char** argv ) {
             } else if( zCode == CMD_SET_HOME ) {
                 zOut << "((set home))" << endl;
                 vector<string>zArgs = zBlk.getArgs( );
-                int zNo = to_axis( zArgs, 1 );
-                if( zNo >= 0 ) {
-                    if( zThread.set_home( zNo, zOut ) ) {
-                        zOut << "((set_home))OK:" << endl;
-                    } else {
-                        zOut << "((set_home))ERROR:" << endl;
+                if( zArgs.size() > 1 ) {
+                    for( int i=1; i<zArgs.size(); i++ ) {
+                        int zNo = to_axis( zArgs, i );
+                        if( zNo >= 0 ) {
+                            if( zThread.set_home( zNo, zOut ) ) {
+                                zOut << "((set_home)) axis "<<zArgs[i]<<" OK:" << endl;
+                            } else {
+                                zOut << "((set_home))ERROR: axis "<<zArgs[i] << endl;
+                            }
+                        } else {
+                            zOut << "((set_home))ERROR:invalid axis " <<zArgs[i] << endl;
+                            break;
+                        }
                     }
                 } else {
                     zOut << "((set_home))ERROR:axis not present" << endl;
@@ -683,13 +741,24 @@ int main( int argc, char** argv ) {
 
             } else if( zCode == CMD_MOVE ) {
                 vector<string>zArgs = zBlk.getArgs( );
-                int zNo = to_axis( zArgs, 1 );
-                step_t zStep = str_to_long( zArgs, 2, INVALID_STEP );
-                if( zNo >= 0 && zStep != INVALID_STEP ) {
-                    if( zThread.move( zNo, zStep, zOut ) ) {
-                        zOut << "((move))OK:" << endl;
-                    } else {
-                        zOut << "((move))ERROR:" << endl;
+                if( zArgs.size()>1 ) {
+                    for( int i = 1; i<zArgs.size(); i+=2 ) {
+                        int zNo = to_axis( zArgs, i );
+                        if( zNo<0 ) {
+                            zOut << "((move)) invalid axis:"<<zArgs[i] << endl;
+                            break;
+                        }
+                        step_t zStep = str_to_long( zArgs, i+1, INVALID_STEP );
+                        if( zStep == INVALID_STEP ) {
+                            zOut << "((set zero))ERROR: axis " << zArgs[i] << " invalid step" << endl;
+                            break;
+                        }
+                        if( zThread.move( zNo, zStep, zOut ) ) {
+                            zOut << "((move)) axis "<< zArgs[i]<<" OK:" << endl;
+                        } else {
+                            zOut << "((move))ERROR:" << endl;
+                            break;
+                        }
                     }
                 } else {
                     zOut << "((move))ERROR:axis not present" << endl;

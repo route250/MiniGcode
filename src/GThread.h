@@ -62,11 +62,11 @@ private:
     usec_t mQ1_NextTime[QLEN];
     step_t mQ1_NextStep[QLEN*NUM_MOTORS];
     
-    int mQ2len = 0;
-    string mQ2_NextLine[QLEN];
-    int mQ2_NextCmd[QLEN];
-    usec_t mQ2_NextTime[QLEN];
-    step_t mQ2_NextStep[QLEN*NUM_MOTORS];
+    int mCmdSend_length = 0;
+    string mCmdSend_line[QLEN];
+    int mCmdSend_cmd[QLEN];
+    usec_t mCmdSend_time[QLEN];
+    step_t mCmdSend_step[QLEN*NUM_MOTORS];
 
     MGaxis mAxis[NUM_MOTORS];
     double mScale = 1.0;
@@ -117,8 +117,10 @@ public:
     void setDbgWait( usec_t aWait );
     usec_t getDbgWait();
 private:
-    bool get();
+    bool __queue_copy();
+    bool recieve_cmd(int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[]);
     bool get( int *aCmd, string *aLine, usec_t *aUsec, step_t aStep[] );
+    bool send_cmd( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep );
 };
 
 #endif /* GTHREAD_H */
