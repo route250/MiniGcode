@@ -59,6 +59,9 @@ private:
     bool mDoneHoming;
     bool mAbort;//停止信号？
 
+    // モータの位置
+    step_t motor_current_step = 0;
+
 public:
 
     int enable_power = 0;
@@ -70,9 +73,12 @@ public:
 //    long pulse_inc_usec = ( pulse_max_length_usec - pulse_min_length_usec ) / 3;
 
     // モータの位置
-    step_t current_step = 0;
+    step_t axis_current_step = 0;
     step_t start_step;
     step_t target_step = 0;
+    
+    pos_t mPichPos = 0;
+    pos_t mOffsetPos = 0;
     
     // コンストラクタ
     MGaxis();
@@ -115,7 +121,8 @@ public:
     // ログ出力用
     void out_phase( int A1, int A2, int B1, int B2 );
     void out_phase_no( int ph );
-    void out_step( int direction, bool aForce );
+    int out_step( int direction, bool aForce );
+    void step( int direction );
     void signal( long time_nonsec );
     int getPinA1();
     int getPinB1();
@@ -135,6 +142,7 @@ public:
     step_t pos_to_step( pos_t aPos );
     pos_t step_to_pos( step_t aStep );
     double getPosPerStep();
+    double getPosPerStep2();
     step_t getCurrentStep();
     pos_t getCurrentPos();
 private:

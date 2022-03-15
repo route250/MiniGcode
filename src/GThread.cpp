@@ -40,10 +40,6 @@ GThread::GThread() {
     mRun = false;
     mCurrentLine = "";
     mCurrentTime = 0;
-    for( int i=0; i<NUM_MOTORS; i++ ) {
-        mCurrentStep[i] = 0;
-        mOffsetPos[i] = 0;
-    }
     mNext = false;
     mNextTime = 0;
     mAbort = false;
@@ -74,7 +70,7 @@ void GThread::setScale( double aScale ) {
 pos_vct GThread::step_to_pos( step_vct& aStep ) {
     pos_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        aResult[i] = mAxis[i].step_to_pos( aStep[i] ) + mOffsetPos[i];
+        aResult[i] = mAxis[i].step_to_pos( aStep[i] );
     }
     return aResult;
 }
@@ -82,7 +78,7 @@ pos_vct GThread::step_to_pos( step_vct& aStep ) {
 step_vct GThread::pos_to_step( pos_vct& aPos ) {
     step_vct aResult(NUM_MOTORS);
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        aResult[i] = mAxis[i].pos_to_step( aPos[i] - mOffsetPos[i] );
+        aResult[i] = pos_to_step( i, aPos[i] );
     }
     return aResult;
 }
@@ -91,14 +87,18 @@ double GThread::getPosPerStep( int aNo ) {
     return mAxis[aNo].getPosPerStep();
 }
 
+double GThread::getPosPerStep2( int aNo ) {
+    return mAxis[aNo].getPosPerStep2();
+}
+
 step_t GThread::pos_to_step( int aNo, pos_t aPos ) {
-    return mAxis[aNo].pos_to_step( aPos - mOffsetPos[aNo] );
+    return mAxis[aNo].pos_to_step( aPos );
 }
 step_t GThread::getCurrentStep( int aNo ) {
     return mAxis[aNo].getCurrentStep();
 }
 pos_t GThread::getCurrentPos( int aNo ) {
-    return mAxis[aNo].getCurrentPos() + mOffsetPos[aNo];
+    return mAxis[aNo].getCurrentPos();
 }
 
 //------------------------------------------------------------------------------
@@ -134,9 +134,9 @@ bool GThread::configure( config& aConfig ) {
             zLength = d * zSteps;
         }
         if( zPich > 0 ) {
-            mPich[i] = zPich;
+            mAxis[i].mPichPos = zPich;
         } else {
-            mPich[i] = 0;
+            mAxis[i].mPichPos = 0;
         }
         mAxis[i].setStepAngle( zStepAngle );
         mAxis[i].setExcitationMethod( zExcitation );
@@ -146,7 +146,7 @@ bool GThread::configure( config& aConfig ) {
         bool zReverse = aConfig.getBool( zPath + "/reverse", false );
 
         mAxis[i].setReverse( zReverse );
-        mOffsetPos[i] = zOffset;
+        mAxis[i].mOffsetPos = zOffset;
         std::cout << "[config]" << zPath <<" steps:" << zSteps << " length:" << zLength << std::endl;
 
         int pinA1 = aConfig.getNumber( zPath + "/motor/pinA1", 0 );
@@ -375,7 +375,6 @@ bool GThread::isDoneHoming() {
 void GThread::scan_origin( int aNo, std::ostream &aOut ) {
     if( 0<=aNo && aNo<NUM_MOTORS ) {
         mAxis[aNo].homing(aOut);
-        mCurrentStep[aNo] = 0;
     }
 }
 bool GThread::set_home( int aNo, std::ostream &aOut ) {
@@ -390,10 +389,10 @@ bool GThread::set_limit( int aNo, std::ostream &aOut ) {
 }
 bool GThread::set_zero( int aNo, std::ostream &aOut ) {
     if( 0<=aNo && aNo<NUM_MOTORS ) {
-        pos_t zCurrentPos = mAxis[aNo].getCurrentPos();
+        pos_t zCurrentPos = mAxis[aNo].getCurrentPos() - mAxis[aNo].mOffsetPos;
         pos_t zOff = -zCurrentPos;
-        aOut << "offset "<<mOffsetPos[aNo]<<" to "<<zOff<<endl;
-        mOffsetPos[aNo] = zOff;
+        aOut << "offset "<<mAxis[aNo].mOffsetPos<<" to "<<zOff<<endl;
+        mAxis[aNo].mOffsetPos = zOff;
         return true;
     }
     return false;
@@ -562,35 +561,31 @@ void GThread::thread_loop() {
             }
             std::cout << std::endl;
         }
-        bool update = true;
-        while( update ) {
+        bool have_next = true;
+        bool have_error = false;
+        while( have_next && !have_error ) {
             // 移動する
+            have_next = false;
             for( int i=0; i<NUM_MOTORS; i++ ) {
-                int d = zStep[i] - mCurrentStep[i];
+                int d = zStep[i] - mAxis[i].getCurrentStep();
                 if( d < 0 ) {
-                    mAxis[i].out_step( -1, false );
-                    mCurrentStep[i]--;
+                    mAxis[i].step( -1 );
                 } else if( d > 0 ) {
-                    mAxis[i].out_step( 1, false );
-                    mCurrentStep[i]++;
+                    mAxis[i].step( 1 );
+                }
+                int d2 = zStep[i] - mAxis[i].getCurrentStep();
+                if( d2 != 0 ) {
+                    have_next = true;
+                }
+                if( d!=0 && d == d2 ) {
+                    std::cout << "ERROR:can not move " << i << std::endl;
+                    have_error = true;
                 }
             }
             // 追加の移動がある？
-            update = false;
-            for( int i=0; i<NUM_MOTORS; i++ ) {
-                int d = zStep[i] - mCurrentStep[i];
-                if( d < 0 ) {
-                    update = true;
-                } else if( d > 0 ) {
-                    update = true;
-                }
+            if( have_next ) {
+                nanosleep( &zWait, NULL );
             }
-            
-            if( !update ) {
-                // 移動終了
-                break;
-            }
-            nanosleep( &zWait, NULL );
         }
 
     }
@@ -766,14 +761,6 @@ void GThread::show( std::ostream &aOut ) {
     aOut << endl;
     for( int i=0; i<NUM_MOTORS; i++ ) {
         mAxis[i].show( aOut );
-        //
-        aOut << "  pich:" <<mPich[i];
-        aOut << " offset:" <<mOffsetPos[i];
-        pos_t zC = mAxis[i].getCurrentPos();
-        pos_t zL = mAxis[i].getPosLength();
-        aOut << " cur:" << (zC + mOffsetPos[i]);
-        aOut << " max:" << (zL + mOffsetPos[i]);
-        aOut << endl;
     }
 }
 

@@ -43,12 +43,8 @@ private:
     bool mActive = false;
     pthread_t mThread;
 
-    deg_t mPich[NUM_MOTORS];
-    pos_t mOffsetPos[NUM_MOTORS];
-    
     string mCurrentLine;
     usec_t mCurrentTime;
-    step_t mCurrentStep[NUM_MOTORS];
     
     bool mNext;
     string mNextLine;
@@ -106,6 +102,7 @@ public:
     step_vct pos_to_step( pos_vct& aPos );
     step_t pos_to_step( int aNo, pos_t aPos );
     double getPosPerStep( int aNo );
+    double getPosPerStep2( int aNo );
     step_t getCurrentStep( int aNo );
     pos_t getCurrentPos( int aNo );
 public:

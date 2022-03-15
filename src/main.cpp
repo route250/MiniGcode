@@ -110,6 +110,7 @@ struct line_move_data {
     double total_time;
     
     int count = 0;
+    int direction = 0;
     // 現在のステップ(開始位置をゼロとして)
     step_t step;
     // 現在の時間
@@ -132,36 +133,49 @@ struct line_move_data {
         start_pos = aStart;
         current_pos = aStart;
         end_pos = aEnd;
+        // 各軸のステップ距離
+        pos_per_step = aPosPerStep; //Reverseの考慮がぬけてる
+        //
+        total_time = aTimeUsec;
         // 移動する距離
         length_pos = aEnd - aStart;
-        // 各軸のステップ距離
-        pos_per_step = aPosPerStep;
         // 各軸の速度
         pos_per_usec = length_pos / aTimeUsec;
         // 各軸の1ステップあたりの時間
-        usec_per_step = std::abs( pos_per_step / pos_per_usec );
+        usec_per_step = pos_per_step / pos_per_usec;
+        if( usec_per_step <=0 ) {
+            std::cout <<"usec is negative " << std::endl;
+        }
         //
         total_steps = aTimeUsec/usec_per_step;
-        total_time = aTimeUsec;
         next_time_usec = usec_per_step;
+        if( length_pos >= 0 ) {
+            if( pos_per_step >= 0 ) {
+                direction = 1;
+            } else {
+                direction = -1;
+            }
+        } else {
+            if( pos_per_step >= 0 ) {
+                direction = -1;
+            } else {
+                direction = 1;
+            }
+        }
     }
     /**
      * 次の位置を計算
      */
     void next() {
         count++;
-        if( length_pos >= 0 ) {
-            step++;
-        } else {
-            step--;
-        }
+        step += direction;
         if( count<total_steps ) {
             current_time_usec = next_time_usec;
             next_time_usec = count * usec_per_step + usec_per_step;
             current_pos = start_pos + std::round( pos_per_usec * current_time_usec );
         } else {
             count = total_steps;
-            if( length_pos >= 0 ) {
+            if( direction >= 0 ) {
                 step = total_steps;
             } else {
                 step = -total_steps;
@@ -347,11 +361,6 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
     // 開始位置(実数化)
     double_vct zXYZ_Start = vct::from_pos( zPos_Start );
     double_vct zXYZ_End = vct::from_pos( zPos_End );
-    zOut << " diff ";
-    out_pos( zOut, zPos_Start );
-    zOut << "->";
-    out_pos( zOut, zPos_End );
-    zOut << endl;
     
     // 移動ベクトル
     double_vct zXYZ_Vector = vct::diff( zXYZ_End, zXYZ_Start );
@@ -373,7 +382,7 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
       
     line_move_data zData[NUM_MOTORS];
     for( int i=0; i<NUM_MOTORS; i++ ) {
-        double zPosPerStep = zThread.getPosPerStep( i );
+        double zPosPerStep = zThread.getPosPerStep2( i );
         zData[i].init( zXYZ_Start[i], zXYZ_End[i], zPosPerStep, zTotalUsec );
     }
     
@@ -406,7 +415,6 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
         xCurrentPos[i] = zPos_End[i];
     }
     zThread.send_end_block( zCurrentStep );
-
 }
 
 /**
@@ -540,7 +548,6 @@ void G02( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
         xCurrentPos[i] = zPos_End[i];
     }
     zThread.send_end_block( zCurrentStep );
-
 }
 
 /*

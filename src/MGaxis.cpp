@@ -203,12 +203,19 @@ double MGaxis::getPosPerStep() {
     return mPosPerStep;
 }
 
+double MGaxis::getPosPerStep2() {
+    if( mReverse ) {
+        return -mPosPerStep;
+    } else {
+        return mPosPerStep;
+    }
+}
 step_t MGaxis::getCurrentStep() {
-    return current_step;
+    return axis_current_step;
 }
 
 step_t MGaxis::pos_to_step( pos_t aPos ) {
-    double v = ((double)aPos) * mStepPerPos;
+    double v = ((double)(aPos-mOffsetPos)) * mStepPerPos;
     step_t zStep = (step_t)v;
     if( mReverse ) {
         return mStep_max - zStep;
@@ -220,10 +227,10 @@ step_t MGaxis::pos_to_step( pos_t aPos ) {
 pos_t MGaxis::step_to_pos( step_t aStep ) {
     if( mReverse ) {
         double v = ((double)aStep) * mPosPerStep;
-        return mPos_length -(pos_t)v;
+        return mPos_length -(pos_t)v + mOffsetPos;
     } else {
         double v = ((double)aStep) * mPosPerStep;
-        return (pos_t)v;
+        return (pos_t)v + mOffsetPos;
     }
 }
 
@@ -311,9 +318,10 @@ bool MGaxis::is_power() {
 bool MGaxis::set_home() {
     if( is_power() && 0 <= mCurrentPhase && mCurrentPhase <= NUM_PHASE ) {
         pulse_elapsed_time_usec = 0;
-        current_step = 0;
-        target_step = current_step;
-        start_step = current_step;
+        motor_current_step = 0;
+        axis_current_step = 0;
+        target_step = axis_current_step;
+        start_step = axis_current_step;
         mDoneHoming = true;
         return true;
     } else {
@@ -404,75 +412,95 @@ void MGaxis::out_phase_no( int ph ) {
 
 }
 
-void MGaxis::out_step( int direction, bool aForce ) {
+//void MGaxis::step( int direction ) {
+//    int motor_dir = mReverse ? -direction : direction;
+//    if( mReverse ) {
+//        if( out_step( -direction, false) ) {
+//            axis_current_step = axis_current_step - 1;
+//        }
+//    } else {
+//        if( out_step( direction, false) ) {
+//            axis_current_step = axis_current_step + 1;
+//        }
+//    }
+//}
+
+void MGaxis::step( int direction ) {
+    if( out_step( direction, false) ) {
+        axis_current_step = axis_current_step + 1;
+    } else {
+        std::cout << "can not step" <<std::endl;
+    }
+}
+
+int MGaxis::out_step( int direction, bool aForce ) {
     int next_phase = mCurrentPhase;
     int step = 0;
-    int st = 0, ed = NUM_PHASE, inc = 1;
-    if ( aForce || 0<= current_step && current_step < mStep_max ) {
-        if( direction > 0 ) {
-            if( mExcitationMethod == 2 ) {
-                if( mCurrentPhase < 0 || 6 <= mCurrentPhase ) {
-                    next_phase = 0;
-                } else if( mCurrentPhase < 2 ) {
-                    next_phase = 2;
-                } else if( mCurrentPhase < 4 ) {
-                    next_phase = 4;
-                } else if( mCurrentPhase < 6 ) {
-                    next_phase = 6;
-                }
-            } else if( mExcitationMethod == 1 ) {
-                if( mCurrentPhase <= 0 || 7 <= mCurrentPhase ) {
-                    next_phase = 1;
-                } else if( mCurrentPhase < 3 ) {
-                    next_phase = 3;
-                } else if( mCurrentPhase < 5 ) {
-                    next_phase = 5;
-                } else if( mCurrentPhase < 7 ) {
-                    next_phase = 7;
-                }
-            } else {
-                if( mCurrentPhase < 0 || mCurrentPhase >= 7 ) {
-                    next_phase = 0;
-                } else {
-                    next_phase = mCurrentPhase + 1;
-                }
+    if( direction > 0 && ( aForce || motor_current_step < mStep_max ) ) {
+        if( mExcitationMethod == 2 ) {
+            if( mCurrentPhase < 0 || 6 <= mCurrentPhase ) {
+                next_phase = 0;
+            } else if( mCurrentPhase < 2 ) {
+                next_phase = 2;
+            } else if( mCurrentPhase < 4 ) {
+                next_phase = 4;
+            } else if( mCurrentPhase < 6 ) {
+                next_phase = 6;
             }
-            step = 1;
-        } else if( direction < 0 ) {
-            if( mExcitationMethod == 2 ) {
-                if( mCurrentPhase < 2 ) {
-                    next_phase = 6; // 0,1 => 6
-                } else if( mCurrentPhase < 4 ) {
-                    next_phase = 0; // 2,3 => 0
-                } else if( mCurrentPhase < 6 ) {
-                    next_phase = 2; // 4,5 => 2
-                } else {
-                    next_phase = 4; // 6,7 => 4
-                }
-            } else if( mExcitationMethod == 1 ) {
-                if( mCurrentPhase < 2 ) {
-                    next_phase = 7; // 0,1 => 7
-                } else if( mCurrentPhase < 4 ) {
-                    next_phase = 1; // 2,3 => 1
-                } else if( mCurrentPhase < 6 ) {
-                    next_phase = 3; // 4,5 => 3
-                } else {
-                    next_phase = 5; // 6,7 => 5
-                }
-            } else {
-                if( mCurrentPhase <= 0 ) {
-                    next_phase = 7;
-                } else if( mCurrentPhase > 7 ) {
-                    next_phase = 0;
-                } else {
-                    next_phase = mCurrentPhase - 1;
-                }
+        } else if( mExcitationMethod == 1 ) {
+            if( mCurrentPhase <= 0 || 7 <= mCurrentPhase ) {
+                next_phase = 1;
+            } else if( mCurrentPhase < 3 ) {
+                next_phase = 3;
+            } else if( mCurrentPhase < 5 ) {
+                next_phase = 5;
+            } else if( mCurrentPhase < 7 ) {
+                next_phase = 7;
             }
-            step = -1;
+        } else {
+            if( mCurrentPhase < 0 || mCurrentPhase >= 7 ) {
+                next_phase = 0;
+            } else {
+                next_phase = mCurrentPhase + 1;
+            }
         }
+        step = 1;
+    } else if( direction < 0 && (aForce || 0<motor_current_step) ) {
+        if( mExcitationMethod == 2 ) {
+            if( mCurrentPhase < 2 ) {
+                next_phase = 6; // 0,1 => 6
+            } else if( mCurrentPhase < 4 ) {
+                next_phase = 0; // 2,3 => 0
+            } else if( mCurrentPhase < 6 ) {
+                next_phase = 2; // 4,5 => 2
+            } else {
+                next_phase = 4; // 6,7 => 4
+            }
+        } else if( mExcitationMethod == 1 ) {
+            if( mCurrentPhase < 2 ) {
+                next_phase = 7; // 0,1 => 7
+            } else if( mCurrentPhase < 4 ) {
+                next_phase = 1; // 2,3 => 1
+            } else if( mCurrentPhase < 6 ) {
+                next_phase = 3; // 4,5 => 3
+            } else {
+                next_phase = 5; // 6,7 => 5
+            }
+        } else {
+            if( mCurrentPhase <= 0 ) {
+                next_phase = 7;
+            } else if( mCurrentPhase > 7 ) {
+                next_phase = 0;
+            } else {
+                next_phase = mCurrentPhase - 1;
+            }
+        }
+        step = -1;
     }
     out_phase_no( next_phase );
-    current_step = current_step + step;
+    motor_current_step = motor_current_step + step;
+
+    return step;
 }
 
 //void MotorCtl::signal( long time_usec ) {
@@ -672,9 +700,10 @@ void MGaxis::homing( std::ostream &aOut ) {
         }
     }
     pulse_elapsed_time_usec = 0;
-    current_step = 0;
-    target_step = current_step;
-    start_step = current_step;
+    motor_current_step = 0;
+    axis_current_step = 0;
+    target_step = axis_current_step;
+    start_step = axis_current_step;
     mDoneHoming = true;
 }
 
@@ -687,9 +716,27 @@ bool is_availavle( MGaxis *m ) {
 }
 
 void MGaxis::show( std::ostream &aOut ) {
-    aOut << "motor no:" << no() << std::endl;
+    aOut << "Axis no:" << no();
 
-    aOut << "  step angle:"<<mStepAngle;
+    aOut << "  length:" << mPos_length << " pich:" <<mPichPos << " offset:" <<mOffsetPos;
+    if( mReverse ) {
+        aOut << "(reverse)";
+    } else {
+        aOut << "(forward)";
+    }
+    aOut <<std::endl;
+    aOut << "  min:" << mOffsetPos << "(pos) " << pos_to_step(mOffsetPos) << "(step)";
+    aOut << " cur:" <<getCurrentPos()<< "(pos) " << getCurrentStep() << "(step)";
+    aOut << " max:"<< (mPos_length+mOffsetPos)<< "(pos) " << pos_to_step(mPos_length + mOffsetPos) << "(step)";
+    if( mReverse ) {
+        aOut << "(reverse)";
+    } else {
+        aOut << "(forward)";
+    }
+    aOut <<std::endl;
+
+    aOut << "  motor";
+    aOut << " step angle:"<<mStepAngle;
     aOut << " Excitation:" << mExcitationMethod;
     aOut << " speed(pps):";
     aOut << " " <<mMinSpeed<<"("<< (float)(pps_to_usec(mMinSpeed))/1000.0<<"msec)";
@@ -697,11 +744,19 @@ void MGaxis::show( std::ostream &aOut ) {
     aOut << "/" <<mIncSpeed<<"("<< (float)(pps_to_usec(mIncSpeed))/1000.0<<"msec)";
     aOut << endl;
     
-    aOut << " ";
-    aOut << " "; print_pin( aOut, getPinA1() );
+    aOut << "    "; print_pin( aOut, getPinA1() );
     aOut << " "; print_pin( aOut, getPinA2() );
     aOut << " "; print_pin( aOut, getPinB1() );
     aOut << " "; print_pin( aOut, getPinB2() );
+    aOut << endl;
+    aOut << "    step:" <<motor_current_step <<"/"<< mStep_max;
+    aOut << " phase:" << mCurrentPhase << " ";
+    aOut << " " << getStateA1();
+    aOut << " " << getStateA2();
+    aOut << " " << getStateB1();
+    aOut << " " << getStateB2();
+    aOut << std::endl;
+    
     if( haveHomingPin() ) {
         aOut << "  home:"; print_pin( aOut, mOrgPin );
         int ah = isHome() ? HIGH : LOW;
@@ -726,20 +781,5 @@ void MGaxis::show( std::ostream &aOut ) {
     } else {
         aOut << "  home:not present" <<std::endl;
     }
-    
-    aOut << "  phase:" << mCurrentPhase << " ";
-    aOut << " " << getStateA1();
-    aOut << " " << getStateA2();
-    aOut << " " << getStateB1();
-    aOut << " " << getStateB2();
-    aOut << std::endl;
-    aOut << "  step:" <<getCurrentStep() <<"/"<< mStep_max;
-    if( mReverse ) {
-        aOut << "(reverse)";
-    } else {
-        aOut << "(forward)";
-    }
-    aOut << "  pos:" <<getCurrentPos() <<"/"<< mPos_length;
-    aOut <<std::endl;
     
 }

@@ -1,10 +1,10 @@
 #
 x {
   length 35000
-  pich 3200
+  pich 800
   motor {
-    StepAngle 18.0
-    ExcitationMethod 12
+    StepAngle 0.9
+    ExcitationMethod 1
     pinA1 26
     pinA2 27
     pinB1 28
@@ -12,27 +12,27 @@ x {
     MinPPS 100
     MaxPPS 100
   }
-  home {
+  xxhome {
     pin 25
     pud dn
     logic false
   }
 }
 y {
-  pich 3000
+  pich 800
   length 37000
 #  steps 500
   motor {
-    StepAngle 18.0
-    ExcitationMethod 12
+    StepAngle 3.75
+    ExcitationMethod 2
     pinA1 21
     pinA2 22
     pinB1 23
     pinB2 24
-    MinPPS 400
-    MaxPPS 400
+    MinPPS 200
+    MaxPPS 200
   }
-  home {
+  xxhome {
     pin 6
     pud up
     logic false
