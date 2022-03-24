@@ -67,6 +67,22 @@ double_vct vct::norm( double_vct& aVector ) {
     return norm( aVector, zLength );
 }
 
+double vct::dot( double_vct& a, double_vct& b ) {
+    double x = 0;
+    for( int i=0; i<a.size(); i++ ) {
+        x = x + a[i] * b[i];
+    }
+    return x;
+}
+
+double_vct vct::corss( double_vct& a, double_vct& b ) {
+    double_vct zRet(3);
+    zRet[0] = a[2]*b[3] - a[3]*b[2];
+    zRet[1] = a[3]*b[1] - a[1]*b[3];
+    zRet[2] = a[1]*b[2] - a[2]*b[1];
+    return zRet;
+}
+
 bool vct::is_ok( pos_vct& aVector ) {
     if( aVector.size() == 0 ) {
         return false;

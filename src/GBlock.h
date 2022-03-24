@@ -137,6 +137,11 @@ public:
             aPos[i] = mXYZ[i];
         }
     }
+    inline void getTarget( pos_vct& aPos ) {
+        for( int i=0; i<NUM_MOTORS; i++ ) {
+            aPos[i] = mXYZ[i];
+        }
+    }
     vector<string> getArgs();
     inline string getLine() {
         return mRawLine;

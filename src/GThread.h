@@ -105,6 +105,7 @@ public:
     double getPosPerStep2( int aNo );
     step_t getCurrentStep( int aNo );
     pos_t getCurrentPos( int aNo );
+    pos_t getMinFeed( int aNo );
 public:
     void thread_loop();
     bool put( int aCmd, string& aLine, usec_t aUsec, step_vct& aStep );

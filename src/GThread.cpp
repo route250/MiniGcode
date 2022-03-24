@@ -101,6 +101,11 @@ pos_t GThread::getCurrentPos( int aNo ) {
     return mAxis[aNo].getCurrentPos();
 }
 
+pos_t GThread::getMinFeed( int aNo ) {
+    step_t pos_per_sec = mAxis[aNo].getPosPerStep() * mAxis[aNo].getMinSpeed();
+    return pos_per_sec * 60.;
+}
+
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
@@ -352,6 +357,9 @@ void GThread::poff() {
 void GThread::pon() {
     for( int i = 0;i<NUM_MOTORS; i++ ) {
         mAxis[i].pon();
+    }
+    if( mCostTime_nanosec == 0 || mCostWait_nanosec == 0 || mMinimumWait_nanosec == 0 ) {
+        adjust(std::cout);
     }
 }
 bool GThread::is_power() {

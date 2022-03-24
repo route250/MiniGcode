@@ -22,10 +22,20 @@
 using std::cout;
 using std::endl;
 
+bool zG02toG01 = false;
+bool zCCW = false;
+
+feed_t zMaxFeed = 800000; // 800mm/min
+int zAbort = 0;
+
+
 /* シグナルハンドラ */
 void sig_handler( int signo ) {
     if( signo == SIGUSR1 ) {
         printf( "received SIGUSR1\n" );
+    } else if( signo == SIGINT ) {
+        printf( "received SIGINT\n" );
+        zAbort = 1;
     } else if( signo == SIGHUP ) {
         printf( "received SIGHUP\n" );
     } else if( signo == SIGQUIT ) {
@@ -64,25 +74,49 @@ bool check( std::ostream &zOut, GThread& zThread, int *zStatus ) {
     return *zStatus == 0;
 }
 
-bool zG02toG01 = false;
-bool zCCW = false;
-
-feed_t zMaxFeed = 800000; // 800mm/min
-pos_vct xCurrentPos( NUM_MOTORS );
-
 double getPosPerUsec( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
+    // 開始位置
+    pos_vct zPos_Start = zBlk.getCurrent( );
+    // 終了位置
+    pos_vct zPos_End = zBlk.getTarget( );
+    // 最大送り速度
+    pos_t zMaxFeed = -1;
+    for( int i=0; i<NUM_MOTORS; i++ ) {
+        if( zPos_Start[i] != zPos_End[i] ) {
+            zOut << "["<<i<<"]"<<zThread.getMinFeed(i)<<"(pos/sec)"<<endl;
+            if( zMaxFeed < 0 || zThread.getMinFeed( i ) < zMaxFeed ) {
+                zMaxFeed = zThread.getMinFeed( i );
+            }
+        }
+    }
+    if( zMaxFeed < 0 ) {
+        zMaxFeed = zThread.getMinFeed( 0 );
+        for( int i=1; i<NUM_MOTORS; i++ ) {
+            if( zThread.getMinFeed( i ) < zMaxFeed ) {
+                zMaxFeed = zThread.getMinFeed( i );
+            }
+        }
+    }
     // 送り速度
-    double zFeed = zMaxFeed;
+    pos_t zFeed = zMaxFeed;
     if( zBlk.getCode() != 0 ) {
-        zFeed = (double) zBlk.getFeed( );
+        zFeed = (pos_t) zBlk.getFeed( );
+        zOut << "blk "<<zFeed<<"(pos/sec)"<<endl;
         if( zFeed <= 0 ) {
-            zOut << "ERROR:feed=0.0 use 400.0" << endl;
             zFeed = 400000;
+            if( zFeed > zMaxFeed ) {
+                zFeed = zMaxFeed;
+            }
+            zOut << "ERROR:feed=0.0 use " << (zFeed/1000)<< endl;
+        } else if( zFeed > zMaxFeed ) {
+            zOut << "ERROR:feed="+(zFeed/1000)<<" use " << (zMaxFeed/1000)<< endl;
+            zFeed = zMaxFeed;
         }
     }
     // 送り速度(pos/min)から pos/usec つまり um/usecに変換
     //double x = (zFeed1)/60.0/1000.0/1000.0;
-    double zPosPerUsec = zFeed / 60.0 / 1000.0 / 1000.0; // speed (pos/usec)
+    double zPosPerUsec = ((double)zFeed) / 60.0 / 1000.0 / 1000.0; // speed (pos/usec)
+    zOut << "speed "<< zPosPerUsec <<"(pos/usec) "<<zFeed<<"(pos/sec)"<<endl;
     return zPosPerUsec;
 
 }
@@ -135,24 +169,18 @@ struct line_move_data {
         end_pos = aEnd;
         // 各軸のステップ距離
         pos_per_step = aPosPerStep; //Reverseの考慮がぬけてる
-        //
+        // 移動にかける時間
         total_time = aTimeUsec;
         // 移動する距離
         length_pos = aEnd - aStart;
         // 各軸の速度
         pos_per_usec = length_pos / aTimeUsec;
-        // 各軸の1ステップあたりの時間
-        usec_per_step = pos_per_step / pos_per_usec;
-        if( usec_per_step <=0 ) {
-            std::cout <<"usec is negative " << std::endl;
-        }
-        //
-        total_steps = aTimeUsec/usec_per_step;
-        next_time_usec = usec_per_step;
+        // ステップする方向
         if( length_pos >= 0 ) {
             if( pos_per_step >= 0 ) {
                 direction = 1;
             } else {
+                pos_per_step = -pos_per_step;
                 direction = -1;
             }
         } else {
@@ -162,6 +190,15 @@ struct line_move_data {
                 direction = 1;
             }
         }
+        // 各軸の1ステップあたりの時間
+        usec_per_step = pos_per_step / pos_per_usec;
+        if( usec_per_step <=0 ) {
+            std::cout <<"usec is negative " << std::endl;
+            usec_per_step = - usec_per_step;
+        }
+        //
+        total_steps = aTimeUsec/usec_per_step;
+        next_time_usec = usec_per_step;
     }
     /**
      * 次の位置を計算
@@ -320,9 +357,9 @@ void G01_old( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
     //cout << "time:"<<zTotalUsec<<"(usec)"<<endl;
       
 
-    for( int i = 0; i < NUM_MOTORS; i++ ) {
-        xCurrentPos[i] = zPos_End[i];
-    }
+//    for( int i = 0; i < NUM_MOTORS; i++ ) {
+//        xCurrentPos[i] = zPos_End[i];
+//    }
     zThread.send_end_block( zCurrentStep );
 
 }
@@ -363,7 +400,7 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
     double_vct zXYZ_End = vct::from_pos( zPos_End );
     
     // 移動ベクトル
-    double_vct zXYZ_Vector = vct::diff( zXYZ_End, zXYZ_Start );
+    double_vct zXYZ_Vector = vct::diff( zXYZ_End, zXYZ_Start );  
     // 移動距離を計算
     double zLength = vct::length( zXYZ_Vector );
     // 移動にかかる時間を計算
@@ -411,9 +448,7 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
         zThread.send_step( zNextTime1, zCurrentStep );
 
     }
-    for( int i = 0; i < NUM_MOTORS; i++ ) {
-        xCurrentPos[i] = zPos_End[i];
-    }
+
     zThread.send_end_block( zCurrentStep );
 }
 
@@ -426,7 +461,6 @@ void G01( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
  */
 void G02( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
 
-    char zAddress = zBlk.getAddress( );
     int zCode = zBlk.getCode( );
     string zRawLine = zBlk.getLine( );
 
@@ -467,13 +501,17 @@ void G02( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
 
     double dx0 = zXYZ_Start[0] - zXYZ_Center[0];
     double dy0 = zXYZ_Start[1] - zXYZ_Center[1];
+    double dz0 = zXYZ_Start[2] - zXYZ_Center[2];
+
     double zR = sqrt( dx0 * dx0 + dy0 * dy0 );
 
     dx0 = dx0 / zR;
     dy0 = dy0 / zR;
 
-    double dx1 = ( zXYZ_End[0] - zXYZ_Center[0] ) / zR;
-    double dy1 = ( zXYZ_End[1] - zXYZ_Center[1] ) / zR;
+    int ix = 0;
+    int iy = 1;
+    double dx1 = ( zXYZ_End[ix] - zXYZ_Center[ix] ) / zR;
+    double dy1 = ( zXYZ_End[iy] - zXYZ_Center[iy] ) / zR;
 
     rad_t zRad_Start, zRad_End;
     if( is_cw ) {
@@ -544,9 +582,7 @@ void G02( std::ostream &zOut, GThread& zThread, GBlock& zBlk ) {
             break;
         }
     }
-    for( int i = 0; i < NUM_MOTORS; i++ ) {
-        xCurrentPos[i] = zPos_End[i];
-    }
+
     zThread.send_end_block( zCurrentStep );
 }
 
@@ -563,6 +599,9 @@ int main( int argc, char** argv ) {
     if( signal( SIGUSR1, sig_handler ) == SIG_ERR ) {
         printf( "\ncan't catch SIGUSR1\n" );
     }
+    if( signal( SIGINT, sig_handler ) == SIG_ERR ) {
+        printf( "\ncan't catch SIGINT\n" );
+    }
     if( signal( SIGHUP, sig_handler ) == SIG_ERR ) {
         printf( "\ncan't catch SIGHUP\n" );
     }
@@ -572,12 +611,12 @@ int main( int argc, char** argv ) {
     if( signal( SIGILL, sig_handler ) == SIG_ERR ) {
         printf( "\ncan't catch SIGILL\n" );
     }
-    if( signal( SIGKILL, sig_handler ) == SIG_ERR ) {
-        printf( "\ncan't catch SIGKILL\n" );
-    }
-    if( signal( SIGSTOP, sig_handler ) == SIG_ERR ) {
-        printf( "\ncan't catch SIGSTOP\n" );
-    }
+//    if( signal( SIGKILL, sig_handler ) == SIG_ERR ) {
+//        printf( "\ncan't catch SIGKILL\n" );
+//    }
+//    if( signal( SIGSTOP, sig_handler ) == SIG_ERR ) {
+//        printf( "\ncan't catch SIGSTOP\n" );
+//    }
     if( signal( SIGTERM, sig_handler ) == SIG_ERR ) {
         printf( "\ncan't catch SIGTERM\n" );
     }
@@ -588,8 +627,6 @@ int main( int argc, char** argv ) {
     zOut << "----dump----" << endl;
     zConfig.dump( "  " );
 
-    step_vct zCurrentStep( NUM_MOTORS );
-    pos_vct zCurrentPos( NUM_MOTORS );
 
     zOut << "--" << endl;
     GThread zThread;
@@ -597,15 +634,23 @@ int main( int argc, char** argv ) {
 
     zOut << "--" << endl;
 
+    // コマンドリーダ
     GReader zTopGr;
     GReader *zReader = &zTopGr;
     vector<GReader*> zReaderStack;
-    for( int i = 0; i < NUM_MOTORS; i++ ) {
-        xCurrentPos[i] = zThread.getCurrentPos( i );
-    }
-    int zAbort = 0;
-    for( int i = 0;; i++ ) {
 
+    // 次にGコードを実行する開始位置
+    step_vct zCurrentStep( NUM_MOTORS );
+    pos_vct zNextStartPos( NUM_MOTORS );
+    for( int i = 0; i < NUM_MOTORS; i++ ) {
+        zNextStartPos[i] = zThread.getCurrentPos( i );
+    }
+
+    zAbort = 0;
+
+    for( int seq = 0;; seq++ ) {
+
+        // 異常発生時にコマンドラインまで戻る処理
         if( !zReaderStack.empty( ) && !check( zOut, zThread, &zAbort ) ) {
             zReader->close( );
             zReader = zReaderStack.back( );
@@ -613,46 +658,59 @@ int main( int argc, char** argv ) {
             continue;
         }
 
-        GBlock zBlk = zReader->nextBlock( xCurrentPos );
+        // 次のコマンドを読み込む
+        GBlock zBlk = zReader->nextBlock( zNextStartPos );
         zBlk.out( zOut );
         if( zBlk.getAddress( ) == '\0' ) {
+            // EOF
             zReader->close( );
             if( !zReaderStack.empty( ) ) {
+                // 呼び出し元へ戻る処理
                 zReader = zReaderStack.back( );
                 zReaderStack.pop_back( );
+                continue;
             } else {
+                // 処理ループを抜けて終了
                 break;
             }
         }
 
+        // コマンド判別
         char zAddress = zBlk.getAddress( );
         int zCode = zBlk.getCode( );
 
         if( zAddress == 'G' || zAddress == 'M' ) {
+            // Gコードの場合、異常があれば実行しない
             if( !check( zOut, zThread, &zAbort ) ) {
                 zOut << "ERROR: ignore command" << endl;
                 continue;
             }
         }
         if( zG02toG01 ) {
+            // G02とG03(つまり円弧)をG01(直線)に変換して実行するオプション
             if( zAddress == 'G' && ( zCode == 2 || zCode == 3 ) ) {
                 zCode = 1;
             }
         }
 
+        // G01,G02の処理(直線)
         if( zBlk.getAddress( ) == 'G' && ( zCode == 0 || zCode == 1 ) ) {
             G01( zOut, zThread, zBlk );
+            zBlk.getTarget( zNextStartPos );
 
+        // G02,G03の処理(円弧)
         } else if( zBlk.getAddress( ) == 'G' && ( zCode == 2 || zCode == 3 ) ) {
             G02( zOut, zThread, zBlk );
+            zBlk.getTarget( zNextStartPos );
 
+        // メンテナンスコマンド
         } else if( zBlk.getAddress( ) == '(' ) {
 
             if( zCode == CMD_HELP ) {
                 zOut << "((help未実装))" << endl;
 
             } else if( zCode == CMD_CLEAR_ABORT ) {
-                zOut << "((clear))" << endl;
+                zOut << "((clear abort))" << endl;
                 zAbort = 0;
 
             } else if( zCode == CMD_ADJUST ) {
@@ -662,10 +720,6 @@ int main( int argc, char** argv ) {
             } else if( zCode == CMD_SHOW ) {
                 zOut << "((show))" << endl;
                 zThread.show( zOut );
-
-            } else if( zCode == CMD_CLEAR_ABORT ) {
-                zOut << "((clear abort))" << endl;
-                //zThread.pon();
 
             } else if( zCode == CMD_PON ) {
                 zOut << "((pon))" << endl;
@@ -823,8 +877,9 @@ int main( int argc, char** argv ) {
             } else {
                 zOut << "invalid command" << endl;
             }
+            // メンテナンス実行後のposを拾う
             for( int i = 0; i < NUM_MOTORS; i++ ) {
-                xCurrentPos[i] = zThread.getCurrentPos( i );
+                zNextStartPos[i] = zThread.getCurrentPos( i );
             }
         }
 

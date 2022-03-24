@@ -427,7 +427,11 @@ void MGaxis::out_phase_no( int ph ) {
 
 void MGaxis::step( int direction ) {
     if( out_step( direction, false) ) {
-        axis_current_step = axis_current_step + 1;
+        if( direction > 0 ) {
+            axis_current_step = axis_current_step + 1;
+        } else if( direction < 0 ) {
+            axis_current_step = axis_current_step - 1;
+        }
     } else {
         std::cout << "can not step" <<std::endl;
     }

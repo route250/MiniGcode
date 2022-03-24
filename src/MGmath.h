@@ -140,6 +140,8 @@ namespace vct {
     double_vct diff( double_vct& a, double_vct& b );
     double_t length( double_vct& aVct );
     bool is_ok( pos_vct & aVct );
+    double dot( double_vct& a, double_vct& b );
+    double_vct corss( double_vct& a, double_vct& b );
 }
 
 void out_pos( std::ostream &aOut, pos_vct& aPos );
